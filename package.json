@@ -1,0 +1,43 @@
+{
+  "name": "ailexsi-core-vault-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AILEXSI Core Vault V2 — new generation Vault on verified Core Cortex baseline",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "setup:core": "node scripts/setup-core-deps.mjs",
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run --config vitest.config.ts",
+    "test:unit": "vitest run --config vitest.config.ts tests/unit",
+    "test:integration": "vitest run --config vitest.config.ts tests/integration",
+    "test:migration": "vitest run --config vitest.config.ts tests/migration",
+    "test:acceptance": "vitest run --config vitest.config.ts tests/acceptance",
+    "acceptance": "node scripts/acceptance-gate.mjs",
+    "desktop:dev": "npm run dev --prefix apps/desktop",
+    "desktop:build": "npm run build --prefix apps/desktop"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AILEXSI/ailexsi-core-vault-v2.git"
+  },
+  "license": "MIT",
+  "author": "AILEXSI"
+}

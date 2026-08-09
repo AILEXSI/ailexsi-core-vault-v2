@@ -2,10 +2,10 @@
  * Resolve a real PostgreSQL connection for live suites.
  * Preference: CORE_DATABASE_URL / DATABASE_URL (if reachable)
  *          → embedded-postgres binaries
- * Never returns an InMemory EventStore handle — connection string only.
  *
- * If env URL is set but auth/connect fails, fall through to embedded
- * (placeholder USER/PASS must not hard-fail the suite).
+ * On embedded mode, `newDatabase()` creates an additional DB on the SAME
+ * server (cheap isolation) instead of starting another PostgreSQL process.
+ * This avoids Windows flakiness when acceptance runs many live suites.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -16,6 +16,12 @@ export type LivePgHandle = {
   connectionString: string;
   mode: "env" | "embedded";
   stop: () => Promise<void>;
+  /**
+   * Create an isolated database on the same server (embedded only).
+   * Env mode: returns a unique schema-like name via query params is not supported —
+   * falls back to the same connectionString (caller must use unique data).
+   */
+  newDatabase?: () => Promise<string>;
 };
 
 async function tryEnvUrl(envUrl: string): Promise<LivePgHandle | null> {
@@ -28,6 +34,8 @@ async function tryEnvUrl(envUrl: string): Promise<LivePgHandle | null> {
       connectionString: envUrl,
       mode: "env",
       stop: async () => {},
+      // env: no multi-db helper without superuser; reuse URL
+      newDatabase: async () => envUrl,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -67,10 +75,18 @@ async function startEmbedded(): Promise<LivePgHandle> {
       await pg.initialise();
       await pg.start();
       await pg.createDatabase("ailexsi_v2_core");
-      const connectionString = `postgres://ailexsi_v2:ailexsi_v2_dev@127.0.0.1:${port}/ailexsi_v2_core`;
+      let dbSeq = 0;
+      const base = `postgres://ailexsi_v2:ailexsi_v2_dev@127.0.0.1:${port}`;
+      const connectionString = `${base}/ailexsi_v2_core`;
       return {
         connectionString,
         mode: "embedded",
+        newDatabase: async () => {
+          dbSeq += 1;
+          const name = `ailexsi_v2_iso_${dbSeq}`;
+          await pg.createDatabase(name);
+          return `${base}/${name}`;
+        },
         stop: async () => {
           try {
             await pg.stop();

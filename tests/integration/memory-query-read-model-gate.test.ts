@@ -106,10 +106,12 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
   });
 
   it("pagination pageSize=1, pageSize=2, multi-page, empty, boundaries", async () => {
-    // One isolated Postgres — empty check BEFORE writes (no nested second embedded PG)
-    const isoLive = await startLivePostgres();
+    // Isolated DB on the SAME embedded server (avoids multi-process Windows flakiness)
+    const isoUrl = live!.newDatabase
+      ? await live!.newDatabase()
+      : live!.connectionString;
     const iso = await createCoreRuntime({
-      connectionString: isoLive.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-query-page",
     });
@@ -158,14 +160,15 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
       expect(last.nextCursor).toBeNull();
     } finally {
       await iso.close();
-      await isoLive.stop();
     }
   }, 180_000);
 
   it("active/archived filtering in list", async () => {
-    const isoLive = await startLivePostgres();
+    const isoUrl = live!.newDatabase
+      ? await live!.newDatabase()
+      : live!.connectionString;
     const iso = await createCoreRuntime({
-      connectionString: isoLive.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-query-filter",
     });
@@ -193,7 +196,6 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
       expect(all.some((i) => i.id === b.identity.id)).toBe(true);
     } finally {
       await iso.close();
-      await isoLive.stop();
     }
   }, 120_000);
 
@@ -233,9 +235,11 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
   });
 
   it("CLEAR → REBUILD → IDENTICAL (isolated multi-memory; no new UUIDs)", async () => {
-    const isoLive = await startLivePostgres();
+    const isoUrl = live!.newDatabase
+      ? await live!.newDatabase()
+      : live!.connectionString;
     const iso = await createCoreRuntime({
-      connectionString: isoLive.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-query-replay",
     });
@@ -289,7 +293,6 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
       );
     } finally {
       await iso.close();
-      await isoLive.stop();
     }
   }, 180_000);
 

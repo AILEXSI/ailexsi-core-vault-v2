@@ -24,7 +24,9 @@
     "desktop:build": "npm run build --prefix apps/desktop",
     "test:desktop": "vitest run --config vitest.config.ts tests/integration/desktop-command-path.test.ts tests/integration/desktop-bridge-http.test.ts",
     "test:bridge": "vitest run --config vitest.config.ts tests/integration/desktop-bridge-http.test.ts",
-    "desktop:host": "node --import ./scripts/register-aliases.mjs --import tsx scripts/desktop-host-entry.ts"
+    "desktop:host": "node --import ./scripts/register-aliases.mjs --import tsx scripts/desktop-host-entry.ts",
+    "desktop": "node scripts/desktop-dev.mjs",
+    "desktop:all": "node scripts/desktop-dev.mjs"
   },
   "workspaces": [
     "packages/*",

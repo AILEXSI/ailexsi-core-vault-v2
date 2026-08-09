@@ -45,7 +45,7 @@ export function MemoryPanel() {
       setStore(null);
       setError(
         h.detail ||
-          "Start bridge: npm run desktop:host (requires CORE_DATABASE_URL)"
+          "DesktopHost offline. One command: npm run desktop (starts host + UI). Postgres: docker compose up -d"
       );
     }
     return h.ok;

@@ -243,7 +243,7 @@ let unitOk = false;
 let unitDetail = "";
 try {
   const out = runVitest(
-    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts"
+    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts"
   );
   unitOk = true;
   unitDetail = out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
@@ -358,6 +358,52 @@ gate(
   bridgeOk ? "HTTP /health store=PostgresEventStore" : bridgeDetail.slice(0, 120)
 );
 
+
+// Memory Foundation matrix (live Postgres)
+let foundationOk = false;
+let foundationDetail = "";
+try {
+  const out = runVitest("tests/integration/memory-foundation-gate.test.ts");
+  foundationOk = true;
+  foundationDetail =
+    out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
+  console.log(out);
+} catch (e) {
+  foundationOk = false;
+  foundationDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 1200);
+  console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
+}
+gate(
+  "MEMORY FOUNDATION GATE",
+  foundationOk,
+  foundationDetail.trim().slice(0, 240)
+);
+
+let fsAuditOk = false;
+let fsDetail = "";
+try {
+  const out = runVitest("tests/acceptance/no-canonical-fs-write.test.ts");
+  fsAuditOk = true;
+  fsDetail =
+    out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
+  console.log(out);
+} catch (e) {
+  fsAuditOk = false;
+  fsDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 400);
+  console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
+}
+gate("MEMORY FOUNDATION FS AUDIT", fsAuditOk, fsDetail.trim().slice(0, 200));
+
 const failed = gates.filter((g) => !g.ok);
 const softLive = new Set([
   "LIVE POSTGRES + CORE EVENTSTORE",
@@ -367,6 +413,8 @@ const softLive = new Set([
   "DESKTOP AAS-54 REPLAY",
   "DESKTOP HTTP BRIDGE SUITE",
   "BRIDGE REACHES PostgresEventStore",
+  "MEMORY FOUNDATION GATE",
+  "MEMORY FOUNDATION FS AUDIT",
 ]);
 const hardFailed = failed.filter((g) => !softLive.has(g.name));
 
@@ -375,7 +423,7 @@ let exitCode;
 if (hardFailed.length > 0) {
   status = "BLOCKED";
   exitCode = 1;
-} else if (!liveTestOk || !desktopOk || !bridgeOk) {
+} else if (!liveTestOk || !desktopOk || !bridgeOk || !foundationOk) {
   status = "VERIFICATION PENDING";
   exitCode = 2;
 } else if (failed.length === 0) {

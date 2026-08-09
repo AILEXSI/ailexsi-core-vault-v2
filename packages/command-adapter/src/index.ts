@@ -29,3 +29,9 @@ export {
   type DesktopMemoryCommand,
   type DesktopHostStartOptions,
 } from "./desktop-host.js";
+export {
+  startDesktopBridgeServer,
+  DEFAULT_DESKTOP_HOST_PORT,
+  type DesktopBridgeServer,
+} from "./desktop-bridge-server.js";
+

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { MemoryPanel } from "./components/MemoryPanel";
 
 type DomainView =
   | "overview"
@@ -25,7 +26,7 @@ const DOMAINS: Array<{
     classification: "CORE-BACKED",
     status: "VERIFIED",
     blurb:
-      "Canonical Memory via Core MemoryDomain (create/get/update/archive/restore/getHistory). UI reads V2 read models only.",
+      "Canonical Memory via DesktopHost bridge → Core MemoryDomain. UI reads V2 read models only.",
   },
   {
     id: "insights",
@@ -119,7 +120,7 @@ export function App() {
       <main className="main">
         {view === "overview" ? (
           <>
-            <h2>AILEXSI Core Vault V2 — Foundation</h2>
+            <h2>AILEXSI Core Vault V2</h2>
             <p className="muted">
               Core is authoritative for canonical facts. V2 owns presentation,
               cultivation, retrieval, Continuity packaging, and derived cognition.
@@ -130,6 +131,14 @@ export function App() {
                 <code>CORE 652d01eb06dd0841c3b475023883675af6dcd698</code>
                 <br />
                 <code>VAULT REF 061e444389090c54e431b0e8243e82764f2c198e</code>
+              </p>
+            </div>
+            <div className="card">
+              <h2>Desktop path (Slice A + Bridge)</h2>
+              <p className="muted">
+                UI → Tauri/HTTP Bridge → long-lived DesktopHost →
+                MemoryCommandAdapter → PostgresEventStore → Projection → Read
+                Model. Start host: <code>npm run desktop:host</code>
               </p>
             </div>
             <div className="card">
@@ -151,6 +160,8 @@ export function App() {
               </p>
             </div>
           </>
+        ) : active?.id === "memory" ? (
+          <MemoryPanel />
         ) : (
           active && (
             <div className="card">
@@ -160,12 +171,6 @@ export function App() {
                 <span className="badge v2">{active.status}</span>
               </p>
               <p className="muted">{active.blurb}</p>
-              {active.id === "memory" && (
-                <p className="muted">
-                  Slice A path: Tauri/IPC → long-lived DesktopHost → createCoreRuntime →
-                  MemoryCommandAdapter → PostgresEventStore → Projection → V2 Read Model.
-                </p>
-              )}
             </div>
           )
         )}

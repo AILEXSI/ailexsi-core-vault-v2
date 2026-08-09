@@ -158,3 +158,31 @@ Desktop shutdown → runtime.close()
 Proof: `npm run test:desktop` (live PostgreSQL / embedded-postgres).
 Acceptance: `npm run acceptance` requires desktop suite + foundation live suite.
 
+## Bridge + Memory UI
+
+Long-lived host (required for UI / Tauri):
+
+```bash
+export CORE_DATABASE_URL=postgres://...
+npm run setup:core
+npm run desktop:host
+```
+
+In another terminal:
+
+```bash
+npm run desktop:dev
+```
+
+Open Memory in the sidebar → Create / List / Get.
+
+Path:
+
+```text
+UI → HTTP bridge (or Tauri invoke → Rust proxy)
+  → DesktopHost → MemoryCommandAdapter → PostgresEventStore
+  → Projection → V2 Read Model
+```
+
+Proof: `npm run test:bridge` and `npm run acceptance`.
+

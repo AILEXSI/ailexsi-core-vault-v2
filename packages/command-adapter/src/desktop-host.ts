@@ -11,7 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { MemoryCell, MemoryVersion, UUID } from "@ailexsi/contracts";
-import type { MemoryDetailView } from "@ailexsi/v2-read-models";
+import type { MemoryDetailView, MemoryListItem } from "@ailexsi/v2-read-models";
 import {
   createCoreRuntime,
   type CoreRuntime,
@@ -26,6 +26,7 @@ import type {
 export type DesktopMemoryCommand =
   | "memory.create"
   | "memory.get"
+  | "memory.list"
   | "memory.update"
   | "memory.archive"
   | "memory.restore"
@@ -216,6 +217,27 @@ export class DesktopHost {
     return history;
   }
 
+  async memoryList(options?: { includeArchived?: boolean }): Promise<MemoryListItem[]> {
+    const rt = this.requireRuntime();
+    this.commandCount += 1;
+    return rt.readModel.list(options);
+  }
+
+  /** Host/status probe for bridge health. */
+  status(): {
+    running: boolean;
+    generation: number;
+    commandsServed: number;
+    store: string | null;
+  } {
+    return {
+      running: this.isRunning,
+      generation: this.startGeneration,
+      commandsServed: this.commandCount,
+      store: this.runtime ? this.runtime.store.constructor.name : null,
+    };
+  }
+
   /**
    * EventStore raw stream for a memory — used by AAS-54 / history correspondence tests.
    */
@@ -273,6 +295,8 @@ export async function invokeDesktopCommand(
       return host.memoryCreate(args as Parameters<DesktopHost["memoryCreate"]>[0]);
     case "memory.get":
       return host.memoryGet(args.memoryId as UUID);
+    case "memory.list":
+      return host.memoryList(args as { includeArchived?: boolean });
     case "memory.update":
       return host.memoryUpdate(args as Parameters<DesktopHost["memoryUpdate"]>[0]);
     case "memory.archive":

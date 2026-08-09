@@ -121,7 +121,9 @@ gate(
     readFileSync(
       path.join(root, "packages/command-adapter/src/desktop-host.ts"),
       "utf8"
-    ).includes("invokeDesktopCommand")
+    ).includes("invokeDesktopCommand") &&
+    existsSync(path.join(root, "packages/command-adapter/src/desktop-bridge-server.ts")) &&
+    existsSync(path.join(root, "apps/desktop/src/components/MemoryPanel.tsx"))
 );
 gate(
   "DATABASE CONFIG VERIFIED",
@@ -241,7 +243,7 @@ let unitOk = false;
 let unitDetail = "";
 try {
   const out = runVitest(
-    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts"
+    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts"
   );
   unitOk = true;
   unitDetail = out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
@@ -326,6 +328,36 @@ gate(
     : "desktop suite failed"
 );
 
+// desktop HTTP bridge (Tauri/UI surface)
+let bridgeOk = false;
+let bridgeDetail = "";
+try {
+  const out = runVitest("tests/integration/desktop-bridge-http.test.ts");
+  bridgeOk = true;
+  bridgeDetail =
+    out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
+  console.log(out);
+} catch (e) {
+  bridgeOk = false;
+  bridgeDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 800);
+  console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
+}
+gate(
+  "DESKTOP HTTP BRIDGE SUITE",
+  bridgeOk,
+  bridgeDetail.trim().slice(0, 240)
+);
+gate(
+  "BRIDGE REACHES PostgresEventStore",
+  bridgeOk,
+  bridgeOk ? "HTTP /health store=PostgresEventStore" : bridgeDetail.slice(0, 120)
+);
+
 const failed = gates.filter((g) => !g.ok);
 const softLive = new Set([
   "LIVE POSTGRES + CORE EVENTSTORE",
@@ -333,6 +365,8 @@ const softLive = new Set([
   "DESKTOP COMMAND-PATH SUITE",
   "DESKTOP PATH REACHES PostgresEventStore",
   "DESKTOP AAS-54 REPLAY",
+  "DESKTOP HTTP BRIDGE SUITE",
+  "BRIDGE REACHES PostgresEventStore",
 ]);
 const hardFailed = failed.filter((g) => !softLive.has(g.name));
 
@@ -341,7 +375,7 @@ let exitCode;
 if (hardFailed.length > 0) {
   status = "BLOCKED";
   exitCode = 1;
-} else if (!liveTestOk || !desktopOk) {
+} else if (!liveTestOk || !desktopOk || !bridgeOk) {
   status = "VERIFICATION PENDING";
   exitCode = 2;
 } else if (failed.length === 0) {

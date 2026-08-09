@@ -12,9 +12,9 @@
     "db:probe": "node scripts/probe-postgres.mjs",
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts",
+    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts",
     "test:unit": "vitest run --config vitest.config.ts tests/unit",
-    "test:integration": "vitest run --config vitest.config.ts tests/integration --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts",
+    "test:integration": "vitest run --config vitest.config.ts tests/integration --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts",
     "test:live": "vitest run --config vitest.config.ts tests/integration/live-postgres-memory.test.ts",
     "test:all": "vitest run --config vitest.config.ts",
     "test:migration": "vitest run --config vitest.config.ts tests/migration",
@@ -22,7 +22,9 @@
     "acceptance": "node scripts/acceptance-gate.mjs",
     "desktop:dev": "npm run dev --prefix apps/desktop",
     "desktop:build": "npm run build --prefix apps/desktop",
-    "test:desktop": "vitest run --config vitest.config.ts tests/integration/desktop-command-path.test.ts"
+    "test:desktop": "vitest run --config vitest.config.ts tests/integration/desktop-command-path.test.ts tests/integration/desktop-bridge-http.test.ts",
+    "test:bridge": "vitest run --config vitest.config.ts tests/integration/desktop-bridge-http.test.ts",
+    "desktop:host": "node --import ./scripts/register-aliases.mjs --import tsx scripts/desktop-host-entry.ts"
   },
   "workspaces": [
     "packages/*",
@@ -32,7 +34,8 @@
     "@types/node": "^22.9.0",
     "embedded-postgres": "^18.4.0-beta.17",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "tsx": "^4.19.2"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.0",

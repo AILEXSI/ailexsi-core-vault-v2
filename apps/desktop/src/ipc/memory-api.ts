@@ -1,15 +1,11 @@
 /**
  * Desktop Memory API — shared command names for Tauri invoke and Node DesktopHost.
- *
- * Production (Tauri): window.__TAURI__.core.invoke("memory_create", …)
- * Dev/test (Node):    invokeDesktopCommand("memory.create", …)
- *
- * Both must hit the same long-lived CoreRuntime path. No UI-local memory DB.
  */
 
 export type MemoryCommandName =
   | "memory.create"
   | "memory.get"
+  | "memory.list"
   | "memory.update"
   | "memory.archive"
   | "memory.restore"
@@ -19,6 +15,7 @@ export type MemoryCommandName =
 export const TAURI_MEMORY_COMMANDS = {
   create: "memory_create",
   get: "memory_get",
+  list: "memory_list",
   update: "memory_update",
   archive: "memory_archive",
   restore: "memory_restore",
@@ -33,6 +30,8 @@ export function toDesktopCommand(
       return "memory.create";
     case "memory_get":
       return "memory.get";
+    case "memory_list":
+      return "memory.list";
     case "memory_update":
       return "memory.update";
     case "memory_archive":

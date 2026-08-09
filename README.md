@@ -250,3 +250,4 @@ npm run test:desktop-e2e
 
 See [docs/DESKTOP-MEMORY-E2E.md](docs/DESKTOP-MEMORY-E2E.md).
 
+**Freeze:** tag `v2.1.0-desktop-memory-green` @ `9795374…` — see [docs/PHASE3-DESKTOP-MEMORY-FREEZE.md](docs/PHASE3-DESKTOP-MEMORY-FREEZE.md).

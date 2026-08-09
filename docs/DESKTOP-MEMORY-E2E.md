@@ -26,3 +26,5 @@ Requires live PostgreSQL (env URL or embedded).
 ## Non-goals
 
 Phase 08 · Connectome · Cultivation · Migration writeback · Ollama E2E
+
+**Freeze:** tag `v2.1.0-desktop-memory-green` @ `9795374…` — see [docs/PHASE3-DESKTOP-MEMORY-FREEZE.md](docs/PHASE3-DESKTOP-MEMORY-FREEZE.md).

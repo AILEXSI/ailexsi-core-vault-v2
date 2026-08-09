@@ -55,13 +55,25 @@ Do **not** reuse Phase 2 cursors for retrieval pages.
   project?: string;        // exact match on context.project
   lifecycle?: "active" | "archived";  // exact lifecycle.state
   includeArchived?: boolean; // default true; false ≡ lifecycle active only when lifecycle unset
-  textContains?: string;   // case-sensitive substring of text content or display title
+  textContains?: string;   // case-normalized substring of text content or display title
   pageSize: number;        // 1..100
   afterCursor?: string | null; // opaque exclusive cursor
 }
 ```
 
 Only fields present on Core `MemoryCell` / V2 list projection are filterable. No invented attributes.
+
+### Filter semantics
+
+| Filter | Predicate |
+|--------|-----------|
+| `tagsAny` | **OR**: cell matches if **any** requested tag is in `context.tags` (exact string, no case fold) |
+| `project` | exact string equality on `context.project` |
+| `lifecycle` | exact `lifecycle.state` |
+| `includeArchived` | when `lifecycle` unset: `false` excludes `archived` (default true) |
+| `textContains` | case-normalized (`toLowerCase`) substring on display title + text body |
+| empty `tagsAny` / empty `textContains` | no-op for that filter |
+
 
 ### Order (v1)
 

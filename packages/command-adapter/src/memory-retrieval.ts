@@ -173,13 +173,15 @@ export function matchesHardFilter(
   }
 
   if (q.textContains !== undefined && q.textContains.length > 0) {
-    const needle = q.textContains;
-    const title = displayTitleFrom(cell);
+    // Deterministic case-normalized substring (Unicode default lowercasing)
+    const needle = q.textContains.toLowerCase();
+    const title = displayTitleFrom(cell).toLowerCase();
     let body = "";
     if (cell.content.type === "text") body = cell.content.text;
     else if (cell.content.type === "structured")
       body = JSON.stringify(cell.content);
     else body = cell.content.storageRef;
+    body = body.toLowerCase();
     if (!title.includes(needle) && !body.includes(needle)) return false;
   }
 

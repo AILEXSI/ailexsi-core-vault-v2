@@ -111,6 +111,30 @@ describe("Phase 4 retrieval pure helpers", () => {
         textContains: "amm",
       }).map((i) => i.id)
     ).toEqual(["3"]);
+    // case-normalized
+    expect(
+      filterAndOrderCells(cells, {
+        pageSize: 10,
+        textContains: "ALPHA",
+      }).map((i) => i.id)
+    ).toEqual(["1"]);
+  });
+
+  it("duplicate confirmedAt uses id ASC as final tie-break", () => {
+    const ts = "2026-06-01T12:00:00.000Z";
+    const items = filterAndOrderCells(
+      [
+        cell("b0000000-0000-4000-8000-000000000002", ts, "b"),
+        cell("a0000000-0000-4000-8000-000000000001", ts, "a"),
+        cell("c0000000-0000-4000-8000-000000000003", ts, "c"),
+      ],
+      { pageSize: 10 }
+    );
+    expect(items.map((i) => i.id)).toEqual([
+      "a0000000-0000-4000-8000-000000000001",
+      "b0000000-0000-4000-8000-000000000002",
+      "c0000000-0000-4000-8000-000000000003",
+    ]);
   });
 
   it("pagination no gaps/dups over full ordered set", () => {

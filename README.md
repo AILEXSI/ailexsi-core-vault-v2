@@ -233,3 +233,12 @@ Tag: **`v2.0.0-memory-foundation-green`**
 SHA: `fa0f644d22ec075798c7d873d7cee7c7e3f334f1`  
 Evidence: [docs/MEMORY-FOUNDATION-FREEZE.md](docs/MEMORY-FOUNDATION-FREEZE.md)
 
+## Phase 2 — Query + Read Model
+
+```bash
+npm run test:query
+npm run acceptance
+```
+
+See [docs/QUERY-READ-MODEL.md](docs/QUERY-READ-MODEL.md).
+

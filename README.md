@@ -218,3 +218,12 @@ npm run desktop
 
 Stop with Ctrl+C.
 
+## Memory Foundation Gate
+
+```bash
+npm run test:foundation
+npm run acceptance
+```
+
+See [docs/MEMORY-FOUNDATION.md](docs/MEMORY-FOUNDATION.md).
+

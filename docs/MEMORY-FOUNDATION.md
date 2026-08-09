@@ -1,3 +1,8 @@
+## Freeze
+
+**GREEN — FROZEN** at `fa0f644` — tag `v2.0.0-memory-foundation-green`.
+See [MEMORY-FOUNDATION-FREEZE.md](./MEMORY-FOUNDATION-FREEZE.md).
+
 # AILEXSI Core Vault V2 — Memory Foundation
 
 ## Status

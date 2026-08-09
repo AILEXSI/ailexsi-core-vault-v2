@@ -227,3 +227,9 @@ npm run acceptance
 
 See [docs/MEMORY-FOUNDATION.md](docs/MEMORY-FOUNDATION.md).
 
+## Frozen baseline — Memory Foundation
+
+Tag: **`v2.0.0-memory-foundation-green`**  
+SHA: `fa0f644d22ec075798c7d873d7cee7c7e3f334f1`  
+Evidence: [docs/MEMORY-FOUNDATION-FREEZE.md](docs/MEMORY-FOUNDATION-FREEZE.md)
+

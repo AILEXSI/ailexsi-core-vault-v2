@@ -21,6 +21,12 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildAcceptanceEvidence,
+  writeAcceptanceEvidence,
+  findTagForSha,
+  assertEvidenceShape,
+} from "./acceptance-evidence.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const baselines = JSON.parse(
@@ -557,5 +563,35 @@ if (failed.length) {
   for (const f of failed) console.log(`  - ${f.name}: ${f.detail}`);
 }
 console.log("========================================\n");
+
+// Phase 4.1 — persist machine-readable evidence (docs only; never creates tags)
+try {
+  const tag = findTagForSha(root, localHead);
+  const payload = buildAcceptanceEvidence({
+    status,
+    exitCode,
+    testedSha: localHead,
+    originMainSha: originHead,
+    corePin: baselines.core.sha,
+    vaultPin: baselines.vaultReference.sha,
+    livePostgres,
+    desktopPath,
+    gates,
+    softLiveNames: [...softLive],
+    phase: "4",
+    tag,
+  });
+  assertEvidenceShape(payload);
+  const { path: evidencePath } = writeAcceptanceEvidence(root, payload);
+  console.log(`EVIDENCE WRITTEN: ${path.relative(root, evidencePath)}`);
+  console.log(`EVIDENCE STATUS: ${payload.status}`);
+  console.log(`EVIDENCE TAG: ${payload.tag ?? "(none)"}`);
+} catch (e) {
+  console.error(
+    "EVIDENCE EMIT FAILED:",
+    e instanceof Error ? e.message : String(e)
+  );
+  // Do not override acceptance exit code on evidence I/O failure after decision
+}
 
 process.exit(exitCode);

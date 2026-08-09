@@ -42,3 +42,8 @@ apps/desktop/dist/
 # Generated reports (keep fixtures)
 acceptance-report.local.json
 *.local.json
+
+# Local non-GREEN acceptance dumps (optional noise)
+evidence/runs/*.verification-pending.acceptance.json
+evidence/runs/*.blocked.acceptance.json
+

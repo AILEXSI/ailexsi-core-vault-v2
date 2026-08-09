@@ -261,6 +261,18 @@ export class DesktopHost {
     return rt.store.getByAggregate(memoryId);
   }
 
+  /** Total events in EventStore (read-only). */
+  async eventCount(): Promise<number> {
+    const rt = this.requireRuntime();
+    return rt.queries.eventCount();
+  }
+
+  /** Query path rebuild (CLEAR → REBUILD ALL). */
+  async rebuildFromCore(): Promise<void> {
+    const rt = this.requireRuntime();
+    await rt.queries.rebuildFromCore();
+  }
+
   /**
    * CLEAR projections/read model then rebuild from EventStore (AAS-54).
    */
@@ -311,7 +323,13 @@ export async function invokeDesktopCommand(
     case "memory.get":
       return host.memoryGet(args.memoryId as UUID);
     case "memory.list":
-      return host.memoryList(args as { includeArchived?: boolean });
+      return host.memoryList(
+        args as {
+          includeArchived?: boolean;
+          pageSize?: number;
+          afterCursor?: string | null;
+        }
+      );
     case "memory.update":
       return host.memoryUpdate(args as Parameters<DesktopHost["memoryUpdate"]>[0]);
     case "memory.archive":

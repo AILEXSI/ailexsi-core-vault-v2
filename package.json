@@ -12,7 +12,7 @@
     "db:probe": "node scripts/probe-postgres.mjs",
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts",
+    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts --exclude tests/integration/desktop-memory-e2e-gate.test.ts",
     "test:unit": "vitest run --config vitest.config.ts tests/unit",
     "test:integration": "vitest run --config vitest.config.ts tests/integration --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts",
     "test:live": "vitest run --config vitest.config.ts tests/integration/live-postgres-memory.test.ts tests/integration/memory-foundation-gate.test.ts",
@@ -22,13 +22,14 @@
     "acceptance": "node scripts/acceptance-gate.mjs",
     "desktop:dev": "npm run dev --prefix apps/desktop",
     "desktop:build": "npm run build --prefix apps/desktop",
-    "test:desktop": "vitest run --config vitest.config.ts tests/integration/desktop-command-path.test.ts tests/integration/desktop-bridge-http.test.ts",
+    "test:desktop": "vitest run --config vitest.config.ts tests/integration/desktop-command-path.test.ts tests/integration/desktop-bridge-http.test.ts tests/integration/desktop-memory-e2e-gate.test.ts",
     "test:bridge": "vitest run --config vitest.config.ts tests/integration/desktop-bridge-http.test.ts",
     "desktop:host": "node --import ./scripts/register-aliases.mjs --import tsx scripts/desktop-host-entry.ts",
     "desktop": "node scripts/desktop-dev.mjs",
     "desktop:all": "node scripts/desktop-dev.mjs",
     "test:foundation": "vitest run --config vitest.config.ts tests/integration/memory-foundation-gate.test.ts tests/acceptance/no-canonical-fs-write.test.ts",
-    "test:query": "vitest run --config vitest.config.ts tests/integration/memory-query-read-model-gate.test.ts tests/unit/memory-read-model-pagination.test.ts"
+    "test:query": "vitest run --config vitest.config.ts tests/integration/memory-query-read-model-gate.test.ts tests/unit/memory-read-model-pagination.test.ts",
+    "test:desktop-e2e": "vitest run --config vitest.config.ts tests/integration/desktop-memory-e2e-gate.test.ts"
   },
   "workspaces": [
     "packages/*",

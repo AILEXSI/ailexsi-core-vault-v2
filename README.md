@@ -242,3 +242,11 @@ npm run acceptance
 
 See [docs/QUERY-READ-MODEL.md](docs/QUERY-READ-MODEL.md).
 
+## Phase 3 — Desktop Memory E2E
+
+```bash
+npm run test:desktop-e2e
+```
+
+See [docs/DESKTOP-MEMORY-E2E.md](docs/DESKTOP-MEMORY-E2E.md).
+

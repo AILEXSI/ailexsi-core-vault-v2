@@ -15,6 +15,7 @@ import { PostgresEventStore } from "@ailexsi/eventstore";
 import type { EventStore } from "@ailexsi/eventstore";
 import { MemoryProjection, ProjectionEngine } from "@ailexsi/projections";
 import { MemoryCommandAdapter } from "./memory-command-adapter.js";
+import { MemoryQueryService } from "./memory-query-service.js";
 import { MemoryReadModel } from "@ailexsi/v2-read-models";
 
 export interface CoreRuntime {
@@ -24,6 +25,8 @@ export interface CoreRuntime {
   memoryProjection: MemoryProjection;
   projectionEngine: ProjectionEngine;
   readModel: MemoryReadModel;
+  /** Core-backed query surface (read-only). */
+  queries: MemoryQueryService;
   /** Close Postgres client. */
   close: () => Promise<void>;
   /**
@@ -116,6 +119,13 @@ export async function createCoreRuntime(
     adapter.rebuildFromEvents(stream);
   }
 
+  const queries = new MemoryQueryService({
+    store,
+    adapter,
+    readModel,
+    rebuildAll,
+  });
+
   return {
     database,
     store,
@@ -123,6 +133,7 @@ export async function createCoreRuntime(
     memoryProjection,
     projectionEngine,
     readModel,
+    queries,
     close: async () => {
       await database.client.end({ timeout: 5 });
     },

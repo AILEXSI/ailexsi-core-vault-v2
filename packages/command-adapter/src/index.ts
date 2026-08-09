@@ -40,4 +40,9 @@ export {
   type V2ErrorCode,
   type ClassifiedV2Error,
 } from "./errors.js";
+export {
+  MemoryQueryService,
+  type MemoryHistoryEntry,
+  type MemoryQueryServiceDeps,
+} from "./memory-query-service.js";
 

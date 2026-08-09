@@ -139,13 +139,9 @@ export class DesktopHost {
   }
 
   async memoryGet(memoryId: UUID): Promise<MemoryDetailView | null> {
-    this.requireRuntime();
+    const rt = this.requireRuntime();
     this.commandCount += 1;
-    // Prefer read model; if cold, hydrate from Core then return view
-    const rt = this.runtime!;
-    let view = rt.readModel.get(memoryId);
-    if (view) return view;
-    return this.syncReadModel(memoryId);
+    return rt.queries.getMemory(memoryId);
   }
 
   async memoryUpdate(
@@ -216,37 +212,30 @@ export class DesktopHost {
       eventId: string;
       timestamp: string;
       changeReason?: string;
-      content?: MemoryVersion["content"];
+      content?: unknown;
       previousVersion?: number;
     }>
   > {
     const rt = this.requireRuntime();
     this.commandCount += 1;
-    const history = await rt.adapter.getHistory(memoryId);
-    const stream = await rt.store.getByAggregate(memoryId);
-    const cell = await rt.adapter.get(memoryId);
-    if (cell) {
-      rt.readModel.upsertFromCore(cell, history);
-    }
-    const byVersion = new Map(history.map((h) => [h.version, h]));
-    return stream.map((env) => {
-      const ver = byVersion.get(env.event.aggregateVersion);
-      return {
-        version: env.event.aggregateVersion,
-        eventType: env.event.eventType,
-        eventId: env.event.eventId,
-        timestamp: env.event.timestamp,
-        changeReason: ver?.changeReason,
-        content: ver?.content,
-        previousVersion: ver?.previousVersion,
-      };
-    });
+    return rt.queries.getMemoryHistory(memoryId);
   }
 
-  async memoryList(options?: { includeArchived?: boolean }): Promise<MemoryListItem[]> {
+  async memoryList(options?: {
+    includeArchived?: boolean;
+    pageSize?: number;
+    afterCursor?: string | null;
+  }): Promise<MemoryListItem[] | import("@ailexsi/v2-read-models").ListMemoriesPage> {
     const rt = this.requireRuntime();
     this.commandCount += 1;
-    return rt.readModel.list(options);
+    if (options?.pageSize != null) {
+      return rt.queries.listMemories({
+        includeArchived: options.includeArchived,
+        pageSize: options.pageSize,
+        afterCursor: options.afterCursor,
+      });
+    }
+    return rt.queries.listAll({ includeArchived: options?.includeArchived });
   }
 
   /** Host/status probe for bridge health. */

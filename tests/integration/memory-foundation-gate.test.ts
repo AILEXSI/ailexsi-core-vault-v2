@@ -523,7 +523,12 @@ describe("MEMORY FOUNDATION GATE — live PostgresEventStore", () => {
       // Full projection state A (domain + V2 read model after rebuildAll path)
       await iso.rebuildAll();
       const domainSnapA = new Map(
-        ids.map((id) => [id, snapshotCell((await iso.adapter.get(id))!)])
+        await Promise.all(
+          ids.map(async (id) => [
+            id,
+            snapshotCell((await iso.adapter.get(id))!),
+          ] as const)
+        )
       );
       const readSnapA = JSON.parse(
         JSON.stringify([...iso.readModel.snapshotCells().entries()].sort())

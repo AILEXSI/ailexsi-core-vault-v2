@@ -243,7 +243,7 @@ let unitOk = false;
 let unitDetail = "";
 try {
   const out = runVitest(
-    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts --exclude tests/integration/desktop-memory-e2e-gate.test.ts"
+    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts --exclude tests/integration/desktop-memory-e2e-gate.test.ts --exclude tests/integration/memory-retrieval-context-gate.test.ts"
   );
   unitOk = true;
   unitDetail = out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
@@ -474,6 +474,32 @@ gate(
   e2eOk ? "GET/LIST/HISTORY/REBUILD do not append" : "e2e failed"
 );
 
+
+// Phase 4 — Retrieval + Context
+let retrievalOk = false;
+let retrievalDetail = "";
+try {
+  const out = runVitest("tests/integration/memory-retrieval-context-gate.test.ts");
+  retrievalOk = true;
+  retrievalDetail =
+    out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
+  console.log(out);
+} catch (e) {
+  retrievalOk = false;
+  retrievalDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 1200);
+  console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
+}
+gate(
+  "MEMORY RETRIEVAL + CONTEXT GATE",
+  retrievalOk,
+  retrievalDetail.trim().slice(0, 240)
+);
+
 const failed = gates.filter((g) => !g.ok);
 const softLive = new Set([
   "LIVE POSTGRES + CORE EVENTSTORE",
@@ -493,6 +519,7 @@ const softLive = new Set([
   "DESKTOP USES PostgresEventStore",
   "DESKTOP REPLAY IDENTICAL",
   "DESKTOP READ NO-APPEND",
+  "MEMORY RETRIEVAL + CONTEXT GATE",
 ]);
 const hardFailed = failed.filter((g) => !softLive.has(g.name));
 
@@ -501,7 +528,7 @@ let exitCode;
 if (hardFailed.length > 0) {
   status = "BLOCKED";
   exitCode = 1;
-} else if (!liveTestOk || !desktopOk || !bridgeOk || !foundationOk || !queryOk || !e2eOk) {
+} else if (!liveTestOk || !desktopOk || !bridgeOk || !foundationOk || !queryOk || !e2eOk || !retrievalOk) {
   status = "VERIFICATION PENDING";
   exitCode = 2;
 } else if (failed.length === 0) {
@@ -521,6 +548,7 @@ console.log(`CORE PIN: 652d01eb`);
 console.log(`MEMORY FOUNDATION: frozen`);
 console.log(`QUERY GATE: ${queryOk ? "PASS" : "FAIL"}`);
 console.log(`DESKTOP E2E GATE: ${e2eOk ? "PASS" : "FAIL"}`);
+console.log(`RETRIEVAL GATE: ${retrievalOk ? "PASS" : "FAIL"}`);
 console.log(`READ MODEL GATE: ${queryOk ? "PASS" : "FAIL"}`);
 console.log(`REPLAY GATE: ${queryOk ? "PASS" : "FAIL"}`);
 console.log(`PHASE 08 CODE PRESENT: NO`);

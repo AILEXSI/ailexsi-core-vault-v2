@@ -37,8 +37,12 @@ export type MemoryListItem = {
 
 export type MemoryVersionRow = {
   version: number;
+  eventType?: string;
+  eventId?: string;
+  timestamp?: string;
   changeReason?: string;
   createdAt?: string;
+  previousVersion?: number;
   content?: { type?: string; text?: string };
 };
 

@@ -361,20 +361,26 @@ export function MemoryPanel() {
                   </button>
                 )}
               </div>
-              <h3 className="subhead">History</h3>
+              <h3 className="subhead">History (Core EventStore)</h3>
+              <p className="muted">
+                Source: Core aggregate stream — not UI state.
+              </p>
               {history.length === 0 ? (
                 <p className="muted">No history rows.</p>
               ) : (
                 <ul className="history-list">
                   {history.map((h) => (
-                    <li key={h.version}>
+                    <li key={`${h.version}-${h.eventType ?? ""}-${h.eventId ?? ""}`}>
                       <strong>v{h.version}</strong>
+                      {h.eventType ? (
+                        <span className="badge core"> {h.eventType}</span>
+                      ) : null}
                       {h.changeReason ? ` — ${h.changeReason}` : ""}
-                      {h.content?.text ? (
+                      {h.content && "text" in h.content && h.content.text ? (
                         <div className="muted hist-snip">
-                          {h.content.text.length > 120
-                            ? `${h.content.text.slice(0, 117)}…`
-                            : h.content.text}
+                          {String(h.content.text).length > 120
+                            ? `${String(h.content.text).slice(0, 117)}…`
+                            : String(h.content.text)}
                         </div>
                       ) : null}
                     </li>

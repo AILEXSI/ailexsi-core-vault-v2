@@ -205,16 +205,42 @@ export class DesktopHost {
     return view;
   }
 
-  async memoryHistory(memoryId: UUID): Promise<MemoryVersion[]> {
+  /**
+   * Canonical history from Core MemoryDomain + EventStore event types.
+   * UI must not invent versions.
+   */
+  async memoryHistory(memoryId: UUID): Promise<
+    Array<{
+      version: number;
+      eventType: string;
+      eventId: string;
+      timestamp: string;
+      changeReason?: string;
+      content?: MemoryVersion["content"];
+      previousVersion?: number;
+    }>
+  > {
     const rt = this.requireRuntime();
     this.commandCount += 1;
     const history = await rt.adapter.getHistory(memoryId);
-    // Keep read model histories aligned
+    const stream = await rt.store.getByAggregate(memoryId);
     const cell = await rt.adapter.get(memoryId);
     if (cell) {
       rt.readModel.upsertFromCore(cell, history);
     }
-    return history;
+    const byVersion = new Map(history.map((h) => [h.version, h]));
+    return stream.map((env) => {
+      const ver = byVersion.get(env.event.aggregateVersion);
+      return {
+        version: env.event.aggregateVersion,
+        eventType: env.event.eventType,
+        eventId: env.event.eventId,
+        timestamp: env.event.timestamp,
+        changeReason: ver?.changeReason,
+        content: ver?.content,
+        previousVersion: ver?.previousVersion,
+      };
+    });
   }
 
   async memoryList(options?: { includeArchived?: boolean }): Promise<MemoryListItem[]> {

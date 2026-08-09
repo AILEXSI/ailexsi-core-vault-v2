@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import {
   createCoreRuntime,
   classifyV2Error,
+  V2CommandValidationError,
   type CoreRuntime,
 } from "@ailexsi/v2-command-adapter";
 import { startLivePostgres, type LivePgHandle } from "@ailexsi/v2-test-kit";
@@ -327,19 +328,34 @@ describe("MEMORY FOUNDATION GATE — live PostgresEventStore", () => {
   });
 
   // ── 10 INVALID INPUT ───────────────────────────────────────────────
-  it("INVALID: bad provenance → no event / no corruption", async () => {
+  it("INVALID: bad provenance → V2 validation boundary; no event / no corruption", async () => {
+    /**
+     * Architecturally correct path:
+     *   V2 adapter validateCreateMemory (ProvenanceSchema)
+     *     → V2CommandValidationError  (before Core is invoked)
+     *   Core EventValidationError is not reached for this input.
+     *
+     * Acceptance invariant:
+     *   INVALID → VALIDATION → NO EVENT → NO CORRUPTION
+     */
     const before = (
       await runtime!.store.getStream({ afterSequence: 0, limit: 50_000 })
     ).length;
 
-    await expect(
-      runtime!.adapter.create({
+    let caught: unknown;
+    try {
+      await runtime!.adapter.create({
         content: { type: "text", text: "x" },
-        // @ts-expect-error intentional invalid
+        // @ts-expect-error intentional invalid — rejected at V2 boundary
         provenance: { sourceType: "nope" },
         idempotencyKey: randomUUID(),
-      })
-    ).rejects.toBeInstanceOf(EventValidationError);
+      });
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toBeInstanceOf(V2CommandValidationError);
+    expect(classifyV2Error(caught).code).toBe("VALIDATION");
 
     const after = (
       await runtime!.store.getStream({ afterSequence: 0, limit: 50_000 })
@@ -430,108 +446,178 @@ describe("MEMORY FOUNDATION GATE — live PostgresEventStore", () => {
 
   // ── 12–13 MULTI-MEMORY REPLAY ──────────────────────────────────────
   it("MULTI-MEMORY REPLAY: CLEAR → REBUILD → IDENTICAL (A,B,C nontrivial order)", async () => {
-    const a = await runtime!.adapter.create({
-      content: { type: "text", text: "mem-A-v1" },
-      provenance: provenance(),
-      idempotencyKey: randomUUID(),
-      context: { tags: ["A"], project: "ailexsi-core-vault-v2" },
-    });
-    const b = await runtime!.adapter.create({
-      content: { type: "text", text: "mem-B-v1" },
-      provenance: provenance(),
-      idempotencyKey: randomUUID(),
-      context: { tags: ["B"] },
-    });
-    const c = await runtime!.adapter.create({
-      content: { type: "text", text: "mem-C-v1" },
-      provenance: provenance(),
-      idempotencyKey: randomUUID(),
+    /**
+     * Isolation: dedicated embedded Postgres + runtime so rebuildAll() rebuilds
+     * ONLY this fixture's event stream (not events from earlier shared tests).
+     * rebuildAll() still means REBUILD ALL EVENTS from that EventStore — correct semantic.
+     */
+    const isoLive = await startLivePostgres();
+    const iso = await createCoreRuntime({
+      connectionString: isoLive.connectionString,
+      environment: "test",
+      producer: "v2-memory-foundation-replay-iso",
     });
 
-    await runtime!.adapter.update({
-      memoryId: b.identity.id,
-      content: { type: "text", text: "mem-B-v2" },
-      idempotencyKey: randomUUID(),
-    });
-    await runtime!.adapter.archive({
-      memoryId: a.identity.id,
-      idempotencyKey: randomUUID(),
-      reason: "archive-A",
-    });
-    await runtime!.adapter.update({
-      memoryId: c.identity.id,
-      content: { type: "text", text: "mem-C-v2" },
-      idempotencyKey: randomUUID(),
-    });
-    await runtime!.adapter.restore({
-      memoryId: a.identity.id,
-      idempotencyKey: randomUUID(),
-      reason: "restore-A",
-    });
-    await runtime!.adapter.archive({
-      memoryId: c.identity.id,
-      idempotencyKey: randomUUID(),
-    });
+    try {
+      const a = await iso.adapter.create({
+        content: { type: "text", text: "mem-A-v1" },
+        provenance: provenance(),
+        idempotencyKey: randomUUID(),
+        context: { tags: ["A"], project: "ailexsi-core-vault-v2" },
+      });
+      const b = await iso.adapter.create({
+        content: { type: "text", text: "mem-B-v1" },
+        provenance: provenance(),
+        idempotencyKey: randomUUID(),
+        context: { tags: ["B"] },
+      });
+      const c = await iso.adapter.create({
+        content: { type: "text", text: "mem-C-v1" },
+        provenance: provenance(),
+        idempotencyKey: randomUUID(),
+      });
 
-    const ids = [a.identity.id, b.identity.id, c.identity.id];
-    const stateA: Record<string, unknown> = {};
-    for (const id of ids) {
-      stateA[id] = {
-        cell: snapshotCell((await runtime!.adapter.get(id))!),
-        history: JSON.parse(
-          JSON.stringify(await runtime!.adapter.getHistory(id))
-        ),
-      };
-    }
+      await iso.adapter.update({
+        memoryId: b.identity.id,
+        content: { type: "text", text: "mem-B-v2" },
+        idempotencyKey: randomUUID(),
+      });
+      await iso.adapter.archive({
+        memoryId: a.identity.id,
+        idempotencyKey: randomUUID(),
+        reason: "archive-A",
+      });
+      await iso.adapter.update({
+        memoryId: c.identity.id,
+        content: { type: "text", text: "mem-C-v2" },
+        idempotencyKey: randomUUID(),
+      });
+      await iso.adapter.restore({
+        memoryId: a.identity.id,
+        idempotencyKey: randomUUID(),
+        reason: "restore-A",
+      });
+      await iso.adapter.archive({
+        memoryId: c.identity.id,
+        idempotencyKey: randomUUID(),
+      });
 
-    // Capture V2 read model snap
-    for (const id of ids) {
-      const cell = await runtime!.adapter.get(id);
-      const hist = await runtime!.adapter.getHistory(id);
-      runtime!.readModel.upsertFromCore(cell!, hist);
-    }
-    const readSnapA = runtime!.readModel.snapshotCells();
+      // EventStore contains exactly this fixture's events
+      const allEvents = await iso.store.getStream({
+        afterSequence: 0,
+        limit: 10_000,
+      });
+      expect(allEvents.length).toBe(8); // 3 create + 2 update + 2 archive + 1 restore
 
-    // CLEAR projections
-    runtime!.adapter.clearProjection();
-    runtime!.readModel.clear();
-    for (const id of ids) {
-      expect(await runtime!.adapter.get(id)).toBeNull();
-      expect(runtime!.readModel.get(id)).toBeNull();
-    }
+      const ids = [a.identity.id, b.identity.id, c.identity.id];
+      const stateA: Record<string, unknown> = {};
+      for (const id of ids) {
+        stateA[id] = {
+          cell: snapshotCell((await iso.adapter.get(id))!),
+          history: JSON.parse(
+            JSON.stringify(await iso.adapter.getHistory(id))
+          ),
+        };
+      }
 
-    // REPLAY from EventStore
-    await runtime!.rebuildAll();
-
-    for (const id of ids) {
-      const cell = await runtime!.adapter.get(id);
-      const hist = await runtime!.adapter.getHistory(id);
-      expect(snapshotCell(cell!)).toEqual(
-        (stateA[id] as { cell: unknown }).cell
+      // Full projection state A (domain + V2 read model after rebuildAll path)
+      await iso.rebuildAll();
+      const domainSnapA = new Map(
+        ids.map((id) => [id, snapshotCell((await iso.adapter.get(id))!)])
       );
-      expect(JSON.parse(JSON.stringify(hist))).toEqual(
-        (stateA[id] as { history: unknown }).history
+      const readSnapA = JSON.parse(
+        JSON.stringify([...iso.readModel.snapshotCells().entries()].sort())
       );
+      const histSnapA = JSON.parse(
+        JSON.stringify(
+          Object.fromEntries(
+            await Promise.all(
+              ids.map(async (id) => [id, await iso.adapter.getHistory(id)])
+            )
+          )
+        )
+      );
+
+      // CLEAR projections only (EventStore untouched)
+      iso.adapter.clearProjection();
+      iso.readModel.clear();
+      for (const id of ids) {
+        expect(await iso.adapter.get(id)).toBeNull();
+        expect(iso.readModel.get(id)).toBeNull();
+      }
+      // EventStore still complete
+      expect(
+        (await iso.store.getStream({ afterSequence: 0, limit: 10_000 })).length
+      ).toBe(8);
+
+      // REPLAY ALL from EventStore
+      await iso.rebuildAll();
+
+      for (const id of ids) {
+        const cell = await iso.adapter.get(id);
+        const hist = await iso.adapter.getHistory(id);
+        expect(snapshotCell(cell!)).toEqual(
+          (stateA[id] as { cell: unknown }).cell
+        );
+        expect(JSON.parse(JSON.stringify(hist))).toEqual(
+          (stateA[id] as { history: unknown }).history
+        );
+        expect(snapshotCell(cell!)).toEqual(domainSnapA.get(id));
+      }
+
+      const readSnapB = JSON.parse(
+        JSON.stringify([...iso.readModel.snapshotCells().entries()].sort())
+      );
+      expect(readSnapB).toEqual(readSnapA);
+      expect(iso.readModel.snapshotCells().size).toBe(3);
+
+      const histSnapB = JSON.parse(
+        JSON.stringify(
+          Object.fromEntries(
+            await Promise.all(
+              ids.map(async (id) => [id, await iso.adapter.getHistory(id)])
+            )
+          )
+        )
+      );
+      expect(histSnapB).toEqual(histSnapA);
+
+      // Specific expected finals
+      expect((await iso.adapter.get(a.identity.id))!.lifecycle.state).toBe(
+        "active"
+      );
+      expect(
+        (
+          (await iso.adapter.get(b.identity.id))!.content as { text: string }
+        ).text
+      ).toBe("mem-B-v2");
+      expect((await iso.adapter.get(c.identity.id))!.lifecycle.state).toBe(
+        "archived"
+      );
+
+      // No new IDs
+      expect((await iso.adapter.get(a.identity.id))!.identity.id).toBe(
+        a.identity.id
+      );
+      expect((await iso.adapter.get(b.identity.id))!.identity.id).toBe(
+        b.identity.id
+      );
+      expect((await iso.adapter.get(c.identity.id))!.identity.id).toBe(
+        c.identity.id
+      );
+    } finally {
+      try {
+        await iso.close();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await isoLive.stop();
+      } catch {
+        /* ignore */
+      }
     }
-    expect(runtime!.readModel.snapshotCells()).toEqual(readSnapA);
-
-    // Specific expected finals
-    expect((await runtime!.adapter.get(a.identity.id))!.lifecycle.state).toBe(
-      "active"
-    );
-    expect(
-      ((await runtime!.adapter.get(b.identity.id))!.content as { text: string })
-        .text
-    ).toBe("mem-B-v2");
-    expect((await runtime!.adapter.get(c.identity.id))!.lifecycle.state).toBe(
-      "archived"
-    );
-
-    // No new IDs invented
-    expect((await runtime!.adapter.get(a.identity.id))!.identity.id).toBe(
-      a.identity.id
-    );
-  });
+  }, 180_000);
 
   // ── GET after create ───────────────────────────────────────────────
   it("GET returns same aggregate after create", async () => {

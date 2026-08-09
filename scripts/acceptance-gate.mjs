@@ -273,7 +273,7 @@ let unitOk = false;
 let unitDetail = "";
 try {
   const out = runVitest(
-    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts --exclude tests/integration/desktop-memory-e2e-gate.test.ts --exclude tests/integration/memory-retrieval-context-gate.test.ts --exclude tests/integration/continuity-foundation-gate.test.ts"
+    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts --exclude tests/integration/desktop-memory-e2e-gate.test.ts --exclude tests/integration/memory-retrieval-context-gate.test.ts --exclude tests/integration/continuity-foundation-gate.test.ts --exclude tests/integration/cultivation-foundation-gate.test.ts"
   );
   unitOk = true;
   unitDetail = out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
@@ -559,6 +559,33 @@ gate(
   continuityDetail.trim().slice(0, 240)
 );
 
+
+// Cultivation Foundation
+let cultivationOk = false;
+let cultivationDetail = "";
+try {
+  const out = runVitest("tests/integration/cultivation-foundation-gate.test.ts");
+  cultivationOk = true;
+  cultivationDetail =
+    out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
+  console.log(out);
+} catch (e) {
+  cultivationOk = false;
+  cultivationDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 1200);
+  writeGateFailureLog("CULTIVATION FOUNDATION GATE", e);
+  console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
+}
+gate(
+  "CULTIVATION FOUNDATION GATE",
+  cultivationOk,
+  cultivationDetail.trim().slice(0, 240)
+);
+
 const failed = gates.filter((g) => !g.ok);
 const softLive = new Set([
   "LIVE POSTGRES + CORE EVENTSTORE",
@@ -580,6 +607,7 @@ const softLive = new Set([
   "DESKTOP READ NO-APPEND",
   "MEMORY RETRIEVAL + CONTEXT GATE",
   "CONTINUITY FOUNDATION GATE",
+  "CULTIVATION FOUNDATION GATE",
 ]);
 const hardFailed = failed.filter((g) => !softLive.has(g.name));
 
@@ -588,7 +616,7 @@ let exitCode;
 if (hardFailed.length > 0) {
   status = "BLOCKED";
   exitCode = 1;
-} else if (!liveTestOk || !desktopOk || !bridgeOk || !foundationOk || !queryOk || !e2eOk || !retrievalOk || !continuityOk) {
+} else if (!liveTestOk || !desktopOk || !bridgeOk || !foundationOk || !queryOk || !e2eOk || !retrievalOk || !continuityOk || !cultivationOk) {
   status = "VERIFICATION PENDING";
   exitCode = 2;
 } else if (failed.length === 0) {
@@ -610,6 +638,7 @@ console.log(`QUERY GATE: ${queryOk ? "PASS" : "FAIL"}`);
 console.log(`DESKTOP E2E GATE: ${e2eOk ? "PASS" : "FAIL"}`);
 console.log(`RETRIEVAL GATE: ${retrievalOk ? "PASS" : "FAIL"}`);
 console.log(`CONTINUITY GATE: ${continuityOk ? "PASS" : "FAIL"}`);
+console.log(`CULTIVATION GATE: ${cultivationOk ? "PASS" : "FAIL"}`);
 console.log(`READ MODEL GATE: ${queryOk ? "PASS" : "FAIL"}`);
 console.log(`REPLAY GATE: ${queryOk ? "PASS" : "FAIL"}`);
 console.log(`PHASE 08 CODE PRESENT: NO`);

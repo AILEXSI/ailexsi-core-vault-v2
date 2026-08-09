@@ -1,12 +1,15 @@
-export {
-  type ProposalStatus,
-  type ProposalKind,
-  type CultivationMessage,
-  type MemoryMutationProposal,
-  type ChatProposal,
-  type CultivationProposal,
-  type LlmProvider,
-  type CultivationSession,
+export type {
+  ProposalStatus,
+  ProposalKind,
+  CultivationMessage,
+  MemoryMutationProposal,
+  ChatProposal,
+  CultivationProposal,
+  LlmProvider,
+  CultivationSession,
 } from "./types.js";
 export { OllamaProvider, MockLlmProvider } from "./ollama-provider.js";
-export { CultivationService } from "./cultivation-service.js";
+export {
+  CultivationService,
+  type CultivationChatOptions,
+} from "./cultivation-service.js";

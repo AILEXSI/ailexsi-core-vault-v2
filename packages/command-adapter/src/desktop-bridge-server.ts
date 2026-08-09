@@ -67,6 +67,12 @@ const COMMANDS = new Set<DesktopMemoryCommand>([
   "continuity.export",
   "continuity.inspect",
   "continuity.rehydrate",
+  "cultivation.session.create",
+  "cultivation.session.get",
+  "cultivation.chat",
+  "cultivation.proposal.reject",
+  "cultivation.proposal.defer",
+  "cultivation.proposal.accept",
 ]);
 
 /**

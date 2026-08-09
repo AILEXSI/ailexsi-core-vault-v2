@@ -1,13 +1,14 @@
 /**
- * Cultivation service.
+ * Cultivation service — proposal loop.
  *
- * Core-backed state → V2 context → LLM → AI proposal → human acceptance → Core command
+ * Core-backed context → LLM → EPHEMERAL proposal → human decision →
+ * acceptCanonical only → MemoryCommandAdapter → EventStore.
  *
- * Critical: proposals do not mutate EventStore until acceptCanonical.
+ * Sessions and proposals are EPHEMERAL (in-process Map). Not a second SoT.
  */
 
 import { randomUUID } from "node:crypto";
-import type { MemoryCell } from "@ailexsi/contracts";
+import type { MemoryCell, UUID } from "@ailexsi/contracts";
 import type { MemoryCommandAdapter } from "@ailexsi/v2-command-adapter";
 import type {
   CultivationMessage,
@@ -15,11 +16,21 @@ import type {
   CultivationSession,
   LlmProvider,
   MemoryMutationProposal,
+  ProposalStatus,
 } from "./types.js";
 
 function nowTs(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, ".000Z");
 }
+
+export type CultivationChatOptions = {
+  /** Core-backed MemoryCell[] already resolved by caller (preferred). */
+  contextMemories?: MemoryCell[];
+  /** When set, draft is update_memory for this id. */
+  targetMemoryId?: UUID;
+  /** Proposal source label (mock | ollama | human). */
+  source?: MemoryMutationProposal["source"];
+};
 
 export class CultivationService {
   private sessions = new Map<string, CultivationSession>();
@@ -44,8 +55,8 @@ export class CultivationService {
   }
 
   /**
-   * Build AI context from Core-backed memories (read path only).
-   * Context assembly is V2-owned; facts remain Core-canonical.
+   * Build AI context string from Core-backed cells (read-only presentation).
+   * Caller must resolve cells via Core query/adapter — not a parallel SoT.
    */
   assembleContext(memories: MemoryCell[]): string {
     const lines = memories.map((m) => {
@@ -64,8 +75,14 @@ export class CultivationService {
   async chat(
     sessionId: string,
     userText: string,
-    contextMemories: MemoryCell[] = []
+    options: CultivationChatOptions | MemoryCell[] = {}
   ): Promise<{ message: CultivationMessage; proposal: MemoryMutationProposal }> {
+    // Back-compat: third arg as MemoryCell[]
+    const opts: CultivationChatOptions = Array.isArray(options)
+      ? { contextMemories: options }
+      : options;
+    const contextMemories = opts.contextMemories ?? [];
+
     const session = this.requireSession(sessionId);
     const userMsg: CultivationMessage = {
       id: randomUUID(),
@@ -88,15 +105,17 @@ export class CultivationService {
     };
     session.messages.push(assistantMsg);
 
-    // Draft proposal from AI text — NOT written to Core.
+    const source = opts.source ?? "mock";
+    const isUpdate = !!opts.targetMemoryId;
     const proposal: MemoryMutationProposal = {
       id: randomUUID(),
-      kind: "create_memory",
+      kind: isUpdate ? "update_memory" : "create_memory",
       status: "pending",
       createdAt: nowTs(),
-      source: "mock",
+      source,
       rationale: raw.slice(0, 500),
       draft: {
+        memoryId: opts.targetMemoryId,
         content: { type: "text", text: raw.trim() || userText },
         provenance: {
           sourceType: "agent",
@@ -105,6 +124,7 @@ export class CultivationService {
           parentMemoryIds: contextMemories.map((m) => m.identity.id),
           evidenceIds: [],
         },
+        changeReason: isUpdate ? "cultivation-proposal-update" : undefined,
       },
     };
     session.proposals.push(proposal);
@@ -112,23 +132,27 @@ export class CultivationService {
   }
 
   /**
-   * Reject / defer / mark edited without touching EventStore.
+   * Reject / defer without touching EventStore.
+   * Cannot set accepted via this method.
    */
   setProposalStatus(
     sessionId: string,
     proposalId: string,
-    status: Exclude<MemoryMutationProposal["status"], "accepted">
+    status: Exclude<ProposalStatus, "accepted" | "edited">
   ): CultivationProposal {
     const session = this.requireSession(sessionId);
     const p = session.proposals.find((x) => x.id === proposalId);
     if (!p) throw new Error(`Proposal ${proposalId} not found`);
+    if (p.status === "accepted" || p.status === "edited") {
+      throw new Error(`Cannot change status of ${p.status} proposal`);
+    }
     p.status = status;
     return p;
   }
 
   /**
-   * Accept a memory mutation proposal → Core command path.
-   * Only this method may cause EventStore appends from cultivation.
+   * Accept a memory mutation proposal → Core command path only.
+   * Invalid/double accept throws and must not write.
    */
   async acceptCanonical(
     sessionId: string,
@@ -143,11 +167,18 @@ export class CultivationService {
     if (!p || p.kind === "note") {
       throw new Error(`Memory mutation proposal ${proposalId} not found`);
     }
-    if (p.status === "accepted") {
+    if (p.status === "accepted" || p.status === "edited") {
       throw new Error("Proposal already accepted");
     }
+    if (p.status === "rejected" || p.status === "deferred") {
+      throw new Error(`Cannot accept proposal in status ${p.status}`);
+    }
+    if (p.status !== "pending") {
+      throw new Error(`Cannot accept proposal in status ${p.status}`);
+    }
 
-    const text = options?.editedText ??
+    const text =
+      options?.editedText ??
       (p.draft.content.type === "text" ? p.draft.content.text : "");
     const content =
       p.draft.content.type === "text"
@@ -157,7 +188,10 @@ export class CultivationService {
     const key = options?.idempotencyKey ?? randomUUID();
     let cell: MemoryCell;
 
-    if (p.kind === "update_memory" && p.draft.memoryId) {
+    if (p.kind === "update_memory") {
+      if (!p.draft.memoryId) {
+        throw new Error("update_memory proposal missing draft.memoryId");
+      }
       cell = await this.memoryAdapter.update({
         memoryId: p.draft.memoryId,
         content,
@@ -166,7 +200,6 @@ export class CultivationService {
         idempotencyKey: key,
         createdBy: "cultivation",
       });
-      p.status = options?.editedText ? "edited" : "accepted";
     } else {
       cell = await this.memoryAdapter.create({
         content,
@@ -174,9 +207,9 @@ export class CultivationService {
         idempotencyKey: key,
         createdBy: "cultivation",
       });
-      p.status = options?.editedText ? "edited" : "accepted";
     }
 
+    p.status = options?.editedText !== undefined ? "edited" : "accepted";
     p.acceptedCommandIdempotencyKey = key;
     p.acceptedMemoryId = cell.identity.id;
     return { proposal: p, cell };

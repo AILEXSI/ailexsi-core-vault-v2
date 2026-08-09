@@ -22,6 +22,11 @@ import type {
   V2UpdateMemoryCommand,
   V2LifecycleCommand,
 } from "./types.js";
+import {
+  CultivationService,
+  MockLlmProvider,
+  type LlmProvider,
+} from "@ailexsi/v2-cultivation";
 
 export type DesktopMemoryCommand =
   | "memory.create"
@@ -35,7 +40,13 @@ export type DesktopMemoryCommand =
   | "memory.context"
   | "continuity.export"
   | "continuity.inspect"
-  | "continuity.rehydrate";
+  | "continuity.rehydrate"
+  | "cultivation.session.create"
+  | "cultivation.session.get"
+  | "cultivation.chat"
+  | "cultivation.proposal.reject"
+  | "cultivation.proposal.defer"
+  | "cultivation.proposal.accept";
 
 export interface DesktopHostStartOptions extends CreateCoreRuntimeOptions {
   /** Optional fixed connection string (tests). */
@@ -46,6 +57,10 @@ export class DesktopHost {
   private runtime: CoreRuntime | null = null;
   private startGeneration = 0;
   private commandCount = 0;
+  private cultivation: CultivationService | null = null;
+  private llm: LlmProvider = new MockLlmProvider(
+    "Cultivation foundation mock proposal text"
+  );
 
   /** True when a CoreRuntime is retained for process lifetime. */
   get isRunning(): boolean {
@@ -74,13 +89,24 @@ export class DesktopHost {
       producer: options.producer ?? "v2-desktop-host",
       environment: options.environment ?? "development",
     });
+    // Long-lived cultivation service — same adapter as CoreRuntime (no per-command runtime)
+    this.cultivation = new CultivationService(this.llm, this.runtime.adapter);
     this.startGeneration += 1;
+  }
+
+  /** Test-only: replace LLM before start (or after stop). */
+  setLlmProvider(provider: LlmProvider): void {
+    if (this.runtime) {
+      throw new Error("setLlmProvider only when DesktopHost is stopped");
+    }
+    this.llm = provider;
   }
 
   async stop(): Promise<void> {
     if (!this.runtime) return;
     const rt = this.runtime;
     this.runtime = null;
+    this.cultivation = null;
     await rt.close();
   }
 
@@ -258,6 +284,87 @@ export class DesktopHost {
     };
   }
 
+
+  private requireCultivation(): CultivationService {
+    if (!this.cultivation) {
+      throw new Error("Cultivation not available — DesktopHost not started");
+    }
+    return this.cultivation;
+  }
+
+  async cultivationSessionCreate() {
+    this.requireRuntime();
+    this.commandCount += 1;
+    return this.requireCultivation().createSession();
+  }
+
+  async cultivationSessionGet(args: Record<string, unknown>) {
+    this.requireRuntime();
+    this.commandCount += 1;
+    const sessionId = String(args.sessionId ?? "");
+    const s = this.requireCultivation().getSession(sessionId);
+    return s ?? null;
+  }
+
+  async cultivationChat(args: Record<string, unknown>) {
+    const rt = this.requireRuntime();
+    this.commandCount += 1;
+    const cult = this.requireCultivation();
+    const sessionId = String(args.sessionId ?? "");
+    const text = String(args.text ?? args.userText ?? "");
+    const memoryIds = (args.memoryIds as string[] | undefined) ?? [];
+    const targetMemoryId = args.targetMemoryId as string | undefined;
+
+    // Resolve Core-backed context via existing query/adapter path (not a parallel SoT)
+    const contextMemories = [];
+    for (const id of memoryIds) {
+      const cell = await rt.adapter.get(id as never);
+      if (!cell) {
+        throw new Error(`context memory not found in Core: ${id}`);
+      }
+      contextMemories.push(cell);
+    }
+
+    return cult.chat(sessionId, text, {
+      contextMemories,
+      targetMemoryId: targetMemoryId as never,
+      source: "mock",
+    });
+  }
+
+  async cultivationProposalReject(args: Record<string, unknown>) {
+    this.requireRuntime();
+    this.commandCount += 1;
+    return this.requireCultivation().setProposalStatus(
+      String(args.sessionId ?? ""),
+      String(args.proposalId ?? ""),
+      "rejected"
+    );
+  }
+
+  async cultivationProposalDefer(args: Record<string, unknown>) {
+    this.requireRuntime();
+    this.commandCount += 1;
+    return this.requireCultivation().setProposalStatus(
+      String(args.sessionId ?? ""),
+      String(args.proposalId ?? ""),
+      "deferred"
+    );
+  }
+
+  async cultivationProposalAccept(args: Record<string, unknown>) {
+    this.requireRuntime();
+    this.commandCount += 1;
+    return this.requireCultivation().acceptCanonical(
+      String(args.sessionId ?? ""),
+      String(args.proposalId ?? ""),
+      {
+        editedText: args.editedText as string | undefined,
+        idempotencyKey: args.idempotencyKey as string | undefined,
+      }
+    );
+  }
+
   async continuityExport(args: Record<string, unknown>) {
     const rt = this.requireRuntime();
     this.commandCount += 1;
@@ -401,6 +508,18 @@ export async function invokeDesktopCommand(
       return host.continuityInspect(args);
     case "continuity.rehydrate":
       return host.continuityRehydrate(args);
+    case "cultivation.session.create":
+      return host.cultivationSessionCreate();
+    case "cultivation.session.get":
+      return host.cultivationSessionGet(args);
+    case "cultivation.chat":
+      return host.cultivationChat(args);
+    case "cultivation.proposal.reject":
+      return host.cultivationProposalReject(args);
+    case "cultivation.proposal.defer":
+      return host.cultivationProposalDefer(args);
+    case "cultivation.proposal.accept":
+      return host.cultivationProposalAccept(args);
     default: {
       const _exhaustive: never = command;
       throw new Error(`Unknown desktop command: ${String(_exhaustive)}`);

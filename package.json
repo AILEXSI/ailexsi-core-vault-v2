@@ -12,7 +12,7 @@
     "db:probe": "node scripts/probe-postgres.mjs",
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts --exclude tests/integration/desktop-memory-e2e-gate.test.ts --exclude tests/integration/memory-retrieval-context-gate.test.ts --exclude tests/integration/continuity-foundation-gate.test.ts",
+    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts --exclude tests/integration/desktop-memory-e2e-gate.test.ts --exclude tests/integration/memory-retrieval-context-gate.test.ts --exclude tests/integration/continuity-foundation-gate.test.ts --exclude tests/integration/cultivation-foundation-gate.test.ts",
     "test:unit": "vitest run --config vitest.config.ts tests/unit",
     "test:integration": "vitest run --config vitest.config.ts tests/integration --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts",
     "test:live": "vitest run --config vitest.config.ts tests/integration/live-postgres-memory.test.ts tests/integration/memory-foundation-gate.test.ts",
@@ -31,7 +31,8 @@
     "test:query": "vitest run --config vitest.config.ts tests/integration/memory-query-read-model-gate.test.ts tests/unit/memory-read-model-pagination.test.ts",
     "test:desktop-e2e": "vitest run --config vitest.config.ts tests/integration/desktop-memory-e2e-gate.test.ts",
     "test:retrieval": "vitest run --config vitest.config.ts tests/integration/memory-retrieval-context-gate.test.ts tests/unit/memory-retrieval.test.ts",
-    "test:continuity": "vitest run --config vitest.config.ts tests/integration/continuity-foundation-gate.test.ts tests/unit/continuity-v1.test.ts tests/unit/continuity.test.ts"
+    "test:continuity": "vitest run --config vitest.config.ts tests/integration/continuity-foundation-gate.test.ts tests/unit/continuity-v1.test.ts tests/unit/continuity.test.ts",
+    "test:cultivation": "vitest run --config vitest.config.ts tests/integration/cultivation-foundation-gate.test.ts tests/unit/cultivation-foundation.test.ts tests/integration/ai-writeback-safety.test.ts"
   },
   "workspaces": [
     "packages/*",

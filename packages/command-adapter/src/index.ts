@@ -45,4 +45,19 @@ export {
   type MemoryHistoryEntry,
   type MemoryQueryServiceDeps,
 } from "./memory-query-service.js";
+export {
+  RETRIEVE_ORDER,
+  compareRetrieveOrder,
+  encodeRetrieveCursor,
+  decodeRetrieveCursor,
+  filterAndOrderCells,
+  paginateRetrieve,
+  assembleContextFromViews,
+  matchesHardFilter,
+  type RetrieveMemoriesQuery,
+  type RetrieveMemoriesPage,
+  type AssembleContextSpec,
+  type ContextBundle,
+  type ContextItem,
+} from "./memory-retrieval.js";
 

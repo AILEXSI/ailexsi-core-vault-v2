@@ -62,6 +62,8 @@ const COMMANDS = new Set<DesktopMemoryCommand>([
   "memory.archive",
   "memory.restore",
   "memory.history",
+  "memory.retrieve",
+  "memory.context",
 ]);
 
 /**

@@ -21,6 +21,16 @@ import type {
   ListMemoriesPage,
   MemoryReadModel,
 } from "@ailexsi/v2-read-models";
+import {
+  filterAndOrderCells,
+  paginateRetrieve,
+  assembleContextFromViews,
+  type RetrieveMemoriesQuery,
+  type RetrieveMemoriesPage,
+  type AssembleContextSpec,
+  type ContextBundle,
+  RETRIEVE_ORDER,
+} from "./memory-retrieval.js";
 
 export type MemoryHistoryEntry = {
   version: number;
@@ -137,6 +147,65 @@ export class MemoryQueryService {
       limit: 100_000,
     });
     return page.length;
+  }
+
+  /**
+   * Phase 4 retrieve — HARD FILTER → ORDER (confirmedAt DESC, id ASC) → PAGE.
+   * Does not append events. Does not use Phase 2 list cursors.
+   */
+  async retrieveMemories(
+    query: RetrieveMemoriesQuery
+  ): Promise<RetrieveMemoriesPage> {
+    await this.ensureHydrated();
+    const cells = this.deps.readModel.snapshotCells().values();
+    const ordered = filterAndOrderCells(cells, query);
+    return paginateRetrieve(ordered, query.pageSize, query.afterCursor);
+  }
+
+  /**
+   * Phase 4 context assembly — DERIVED, read-only, budgeted.
+   */
+  async assembleContext(spec: AssembleContextSpec): Promise<ContextBundle> {
+    await this.ensureHydrated();
+    let ids: string[] = [];
+    let orderLabel = "explicit_ids";
+
+    if (spec.memoryIds && spec.memoryIds.length > 0) {
+      ids = [...spec.memoryIds];
+    } else if (spec.retrieve) {
+      const pageSize = spec.retrieve.pageSize ?? spec.maxItems;
+      const page = await this.retrieveMemories({
+        ...spec.retrieve,
+        pageSize,
+      });
+      ids = page.items.map((i) => i.id);
+      orderLabel = RETRIEVE_ORDER;
+    } else {
+      ids = [];
+    }
+
+    const views: MemoryDetailView[] = [];
+    const histories = new Map<
+      string,
+      Awaited<ReturnType<MemoryQueryService["getMemoryHistory"]>>
+    >();
+
+    for (const id of ids) {
+      const view = await this.getMemory(id);
+      if (!view) continue;
+      views.push(view);
+      if (spec.includeHistory) {
+        histories.set(id, await this.getMemoryHistory(id));
+      }
+    }
+
+    return assembleContextFromViews(views, histories, {
+      maxItems: spec.maxItems,
+      maxChars: spec.maxChars,
+      includeHistory: spec.includeHistory,
+      maxHistoryEvents: spec.maxHistoryEvents,
+      orderLabel,
+    });
   }
 
   private async ensureHydrated(): Promise<void> {

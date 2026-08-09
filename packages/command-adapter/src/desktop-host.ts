@@ -30,7 +30,9 @@ export type DesktopMemoryCommand =
   | "memory.update"
   | "memory.archive"
   | "memory.restore"
-  | "memory.history";
+  | "memory.history"
+  | "memory.retrieve"
+  | "memory.context";
 
 export interface DesktopHostStartOptions extends CreateCoreRuntimeOptions {
   /** Optional fixed connection string (tests). */
@@ -253,6 +255,22 @@ export class DesktopHost {
     };
   }
 
+  async memoryRetrieve(
+    query: import("./memory-retrieval.js").RetrieveMemoriesQuery
+  ) {
+    const rt = this.requireRuntime();
+    this.commandCount += 1;
+    return rt.queries.retrieveMemories(query);
+  }
+
+  async memoryContext(
+    spec: import("./memory-retrieval.js").AssembleContextSpec
+  ) {
+    const rt = this.requireRuntime();
+    this.commandCount += 1;
+    return rt.queries.assembleContext(spec);
+  }
+
   /**
    * EventStore raw stream for a memory — used by AAS-54 / history correspondence tests.
    */
@@ -338,6 +356,14 @@ export async function invokeDesktopCommand(
       return host.memoryRestore(args as Parameters<DesktopHost["memoryRestore"]>[0]);
     case "memory.history":
       return host.memoryHistory(args.memoryId as UUID);
+    case "memory.retrieve":
+      return host.memoryRetrieve(
+        args as import("./memory-retrieval.js").RetrieveMemoriesQuery
+      );
+    case "memory.context":
+      return host.memoryContext(
+        args as import("./memory-retrieval.js").AssembleContextSpec
+      );
     default: {
       const _exhaustive: never = command;
       throw new Error(`Unknown desktop command: ${String(_exhaustive)}`);

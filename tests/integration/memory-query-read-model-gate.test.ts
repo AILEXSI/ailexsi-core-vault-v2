@@ -106,7 +106,7 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
   });
 
   it("pagination pageSize=1, pageSize=2, multi-page, empty, boundaries", async () => {
-    // dedicated runtime for clean list
+    // One isolated Postgres — empty check BEFORE writes (no nested second embedded PG)
     const isoLive = await startLivePostgres();
     const iso = await createCoreRuntime({
       connectionString: isoLive.connectionString,
@@ -114,6 +114,11 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
       producer: "v2-query-page",
     });
     try {
+      const empty = await iso.queries.listMemories({ pageSize: 10 });
+      expect(empty.items).toEqual([]);
+      expect(empty.totalMatching).toBe(0);
+      expect(empty.nextCursor).toBeNull();
+
       for (let i = 0; i < 5; i++) {
         await iso.adapter.create({
           content: { type: "text", text: `page-item-${i}` },
@@ -144,30 +149,13 @@ describe("PHASE 2 — QUERY + READ-MODEL GATE (live Postgres)", () => {
       expect(new Set(pages).size).toBe(5);
       expect(pages.length).toBe(5);
 
-      // empty after last
+      // empty after last (exclusive keyset)
       const last = await iso.queries.listMemories({
         pageSize: 2,
         afterCursor: memoryLastCursor(await iso.queries.listAll()),
       });
-      // if cursor is last item, empty page
       expect(last.items.length).toBe(0);
       expect(last.nextCursor).toBeNull();
-
-      // empty store runtime
-      const emptyLive = await startLivePostgres();
-      const emptyRt = await createCoreRuntime({
-        connectionString: emptyLive.connectionString,
-        environment: "test",
-        producer: "v2-query-empty",
-      });
-      try {
-        const empty = await emptyRt.queries.listMemories({ pageSize: 10 });
-        expect(empty.items).toEqual([]);
-        expect(empty.totalMatching).toBe(0);
-      } finally {
-        await emptyRt.close();
-        await emptyLive.stop();
-      }
     } finally {
       await iso.close();
       await isoLive.stop();

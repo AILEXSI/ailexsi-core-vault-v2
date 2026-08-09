@@ -27,6 +27,30 @@ import {
   findTagForSha,
   assertEvidenceShape,
 } from "./acceptance-evidence.mjs";
+import { writeFileSync, mkdirSync } from "node:fs";
+
+function writeGateFailureLog(name, err) {
+  try {
+    const dir = path.join(root, "evidence", "runs");
+    mkdirSync(dir, { recursive: true });
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const file = path.join(dir, `last-failure-${slug}.log`);
+    const body = [
+      `gate: ${name}`,
+      `time: ${new Date().toISOString()}`,
+      "",
+      err?.stdout?.toString?.() || "",
+      "",
+      err?.stderr?.toString?.() || "",
+      "",
+      err?.message || String(err),
+    ].join("\n");
+    writeFileSync(file, body, "utf8");
+    console.error(`FULL FAILURE LOG: ${path.relative(root, file)}`);
+  } catch {
+    /* ignore */
+  }
+}
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const baselines = JSON.parse(
@@ -428,6 +452,7 @@ try {
     e.message ||
     ""
   ).slice(0, 1200);
+  writeGateFailureLog("MEMORY QUERY + READ-MODEL GATE", e);
   console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
 }
 gate(

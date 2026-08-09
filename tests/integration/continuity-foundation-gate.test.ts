@@ -1,6 +1,9 @@
 /**
  * CONTINUITY FOUNDATION GATE — live PostgreSQL
  * Process boundary: Runtime A export → close → Runtime B rehydrate (same EventStore).
+ *
+ * Infrastructure: ONE Embedded-Postgres server per suite + live.newDatabase() isolation
+ * (Windows port/lifecycle races from nested startLivePostgres() are forbidden).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -29,14 +32,37 @@ function provenance(): Provenance {
   };
 }
 
+async function isoUrl(live: LivePgHandle): Promise<string> {
+  if (!live.newDatabase) {
+    throw new Error(
+      "continuity gate requires live.newDatabase() isolation (shared Embedded-Postgres server)"
+    );
+  }
+  return live.newDatabase();
+}
+
 describe("CONTINUITY FOUNDATION GATE", () => {
+  let live: LivePgHandle | null = null;
+
+  beforeAll(async () => {
+    live = await startLivePostgres();
+  }, 180_000);
+
+  afterAll(async () => {
+    try {
+      await live?.stop();
+    } catch {
+      /* ignore */
+    }
+  }, 60_000);
+
   it("LIVE PostgresEventStore process boundary + no-write", async () => {
-    const live = await startLivePostgres();
+    const url = await isoUrl(live!);
     let rtA: CoreRuntime | null = null;
     let rtB: CoreRuntime | null = null;
     try {
       rtA = await createCoreRuntime({
-        connectionString: live.connectionString,
+        connectionString: url,
         environment: "test",
         producer: "v2-continuity-a",
         coreBaselineSha: CORE,
@@ -99,12 +125,12 @@ describe("CONTINUITY FOUNDATION GATE", () => {
       });
       expect(retrievePkg.orderedMemoryIds.length).toBe(3);
 
-      // Process boundary: close A, open B on same DB
+      // Process boundary: close A, open B on same EventStore DB
       await rtA.close();
       rtA = null;
 
       rtB = await createCoreRuntime({
-        connectionString: live.connectionString,
+        connectionString: url,
         environment: "test",
         producer: "v2-continuity-b",
         coreBaselineSha: CORE,
@@ -119,7 +145,6 @@ describe("CONTINUITY FOUNDATION GATE", () => {
       expect(verifyR.ok).toBe(true);
       expect(verifyR.retrieveMatch).toBe(true);
 
-      // rebuild equivalence
       await rtB.queries.rebuildFromCore();
       const verify2 = await rtB.continuity.rehydrateVerify(retrievePkg);
       expect(verify2.ok).toBe(true);
@@ -127,7 +152,6 @@ describe("CONTINUITY FOUNDATION GATE", () => {
       const after = await rtB.queries.eventCount();
       expect(after).toBe(before);
 
-      // unknown id fails
       const bad = await rtB.continuity.rehydrateVerify({
         ...pkg1,
         orderedMemoryIds: [randomUUID()],
@@ -145,17 +169,17 @@ describe("CONTINUITY FOUNDATION GATE", () => {
       } catch {
         /* ignore */
       }
-      await live.stop();
     }
   }, 240_000);
 
   it("Desktop long-lived continuity.export / inspect / rehydrate", async () => {
+    // Isolated DB on suite server — no second Embedded-Postgres process
+    const url = await isoUrl(live!);
     resetDesktopHostForTests();
     const host: DesktopHost = getDesktopHost();
-    const live = await startLivePostgres();
     try {
       await host.start({
-        connectionString: live.connectionString,
+        connectionString: url,
         environment: "test",
         producer: "v2-continuity-desktop",
         coreBaselineSha: CORE,
@@ -201,7 +225,6 @@ describe("CONTINUITY FOUNDATION GATE", () => {
       } catch {
         /* ignore */
       }
-      await live.stop();
     }
   }, 180_000);
 });

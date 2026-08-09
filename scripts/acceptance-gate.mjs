@@ -243,7 +243,7 @@ let unitOk = false;
 let unitDetail = "";
 try {
   const out = runVitest(
-    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts"
+    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts --exclude tests/integration/desktop-bridge-http.test.ts --exclude tests/integration/memory-foundation-gate.test.ts --exclude tests/integration/memory-query-read-model-gate.test.ts"
   );
   unitOk = true;
   unitDetail = out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
@@ -404,6 +404,35 @@ try {
 }
 gate("MEMORY FOUNDATION FS AUDIT", fsAuditOk, fsDetail.trim().slice(0, 200));
 
+
+// Phase 2 — Query + Read-Model (live Postgres)
+let queryOk = false;
+let queryDetail = "";
+try {
+  const out = runVitest("tests/integration/memory-query-read-model-gate.test.ts");
+  queryOk = true;
+  queryDetail =
+    out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
+  console.log(out);
+} catch (e) {
+  queryOk = false;
+  queryDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 1200);
+  console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
+}
+gate(
+  "MEMORY QUERY + READ-MODEL GATE",
+  queryOk,
+  queryDetail.trim().slice(0, 240)
+);
+gate("QUERY GATE", queryOk, queryOk ? "get/list/history/pagination" : "query suite failed");
+gate("READ MODEL GATE", queryOk, queryOk ? "DERIVED read model" : "query suite failed");
+gate("REPLAY GATE", queryOk, queryOk ? "CLEAR→REBUILD→IDENTICAL in query suite" : "query suite failed");
+
 const failed = gates.filter((g) => !g.ok);
 const softLive = new Set([
   "LIVE POSTGRES + CORE EVENTSTORE",
@@ -415,6 +444,10 @@ const softLive = new Set([
   "BRIDGE REACHES PostgresEventStore",
   "MEMORY FOUNDATION GATE",
   "MEMORY FOUNDATION FS AUDIT",
+  "MEMORY QUERY + READ-MODEL GATE",
+  "QUERY GATE",
+  "READ MODEL GATE",
+  "REPLAY GATE",
 ]);
 const hardFailed = failed.filter((g) => !softLive.has(g.name));
 
@@ -423,7 +456,7 @@ let exitCode;
 if (hardFailed.length > 0) {
   status = "BLOCKED";
   exitCode = 1;
-} else if (!liveTestOk || !desktopOk || !bridgeOk || !foundationOk) {
+} else if (!liveTestOk || !desktopOk || !bridgeOk || !foundationOk || !queryOk) {
   status = "VERIFICATION PENDING";
   exitCode = 2;
 } else if (failed.length === 0) {
@@ -439,6 +472,11 @@ console.log("AILEXSI CORE VAULT V2 — ACCEPTANCE GATE");
 console.log(`FINAL STATUS: ${status}`);
 console.log(`LIVE POSTGRES: ${livePostgres ? "yes" : "no"}`);
 console.log(`DESKTOP PATH: ${desktopPath ? "yes" : "no"}`);
+console.log(`CORE PIN: 652d01eb`);
+console.log(`MEMORY FOUNDATION: frozen`);
+console.log(`QUERY GATE: ${queryOk ? "PASS" : "FAIL"}`);
+console.log(`READ MODEL GATE: ${queryOk ? "PASS" : "FAIL"}`);
+console.log(`REPLAY GATE: ${queryOk ? "PASS" : "FAIL"}`);
 console.log(`PHASE 08 CODE PRESENT: NO`);
 console.log(`Failed gates: ${failed.length}`);
 if (failed.length) {

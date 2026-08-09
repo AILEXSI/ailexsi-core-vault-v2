@@ -482,6 +482,7 @@ try {
     e.message ||
     ""
   ).slice(0, 1200);
+  writeGateFailureLog("DESKTOP MEMORY E2E GATE", e);
   console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
 }
 gate(

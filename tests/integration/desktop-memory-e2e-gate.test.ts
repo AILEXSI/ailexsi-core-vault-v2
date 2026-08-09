@@ -188,13 +188,16 @@ describe("PHASE 3 — DESKTOP MEMORY E2E (live PostgresEventStore)", () => {
   });
 
   it("G) LIST + pagination via Desktop IPC", async () => {
-    // isolated host for clean list
+    // isolated DB on suite Embedded-Postgres (no second process)
     resetDesktopHostForTests();
     const isoHost = getDesktopHost();
-    const isoLive = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("desktop e2e requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     try {
       await isoHost.start({
-        connectionString: isoLive.connectionString,
+        connectionString: isoUrl,
         environment: "test",
         producer: "v2-desktop-e2e-list",
       });
@@ -260,13 +263,7 @@ describe("PHASE 3 — DESKTOP MEMORY E2E (live PostgresEventStore)", () => {
       } catch {
         /* ignore */
       }
-      try {
-        await isoLive.stop();
-      } catch {
-        /* ignore */
-      }
       // restore primary host for subsequent tests in this file
-      // (suite may have more tests using outer host)
       resetDesktopHostForTests();
       host = getDesktopHost();
       await host.start({
@@ -281,10 +278,13 @@ describe("PHASE 3 — DESKTOP MEMORY E2E (live PostgresEventStore)", () => {
   it("REPLAY: CLEAR → rebuildFromCore → IDENTICAL via Desktop host", async () => {
     resetDesktopHostForTests();
     const isoHost = getDesktopHost();
-    const isoLive = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("desktop e2e requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     try {
       await isoHost.start({
-        connectionString: isoLive.connectionString,
+        connectionString: isoUrl,
         environment: "test",
         producer: "v2-desktop-e2e-replay",
       });
@@ -346,11 +346,6 @@ describe("PHASE 3 — DESKTOP MEMORY E2E (live PostgresEventStore)", () => {
     } finally {
       try {
         await isoHost.stop();
-      } catch {
-        /* ignore */
-      }
-      try {
-        await isoLive.stop();
       } catch {
         /* ignore */
       }

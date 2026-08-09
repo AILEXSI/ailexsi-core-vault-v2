@@ -94,18 +94,10 @@ function spawnNpm(args, name) {
 
 loadDotEnv();
 
-const DEFAULT_URL =
-  "postgres://ailexsi_v2:ailexsi_v2_dev@127.0.0.1:5433/ailexsi_v2_core";
-
-if (!process.env.CORE_DATABASE_URL && !process.env.DATABASE_URL) {
-  process.env.CORE_DATABASE_URL = DEFAULT_URL;
-  console.log(
-    `[desktop] CORE_DATABASE_URL not set — using docker-compose default:\n  ${DEFAULT_URL}`
-  );
-  console.log(
-    "[desktop] If host fails: docker compose up -d   then retry npm run desktop"
-  );
-}
+// Host resolves DB: reachable CORE_DATABASE_URL → else embedded-postgres
+console.log(
+  "[desktop] DesktopHost will use CORE_DATABASE_URL if reachable, else embedded-postgres (no Docker required)"
+);
 
 const hostPort = process.env.DESKTOP_HOST_PORT || "17890";
 const healthUrl = `http://127.0.0.1:${hostPort}/health`;
@@ -149,7 +141,7 @@ children.push(host);
 host.on("exit", (code) => {
   if (code && code !== 0) {
     console.error(
-      `[desktop] DesktopHost exited (${code}). Is Postgres up?  docker compose up -d`
+      `[desktop] DesktopHost exited (${code}). Host failed — check log above (embedded PG or CORE_DATABASE_URL)`
     );
     shutdown(code);
   }

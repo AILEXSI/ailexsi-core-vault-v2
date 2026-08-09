@@ -199,14 +199,22 @@ All mutations: Bridge → DesktopHost → PostgresEventStore only.
 ## Desktop (one terminal)
 
 ```bash
-docker compose up -d
+git pull
 npm run desktop
 ```
 
-Starts **DesktopHost + Vite UI** together. Open http://localhost:1420
+Starts **DesktopHost + Vite UI**. Open http://localhost:1420
 
-Default DB: `postgres://ailexsi_v2:ailexsi_v2_dev@127.0.0.1:5433/ailexsi_v2_core`  
-(or set `CORE_DATABASE_URL` / `.env`)
+Database (automatic):
+1. `CORE_DATABASE_URL` if set **and reachable**
+2. else **embedded-postgres** (no Docker required; data is ephemeral)
 
-Stop with Ctrl+C (kills host + UI).
+Optional persistent DB:
+```bash
+docker compose up -d
+$env:CORE_DATABASE_URL="postgres://ailexsi_v2:ailexsi_v2_dev@127.0.0.1:5433/ailexsi_v2_core"
+npm run desktop
+```
+
+Stop with Ctrl+C.
 

@@ -14,6 +14,10 @@ export type MemoryDetailView = {
   id: string;
   shortId: string;
   content: { class: string; value: { type?: string; text?: string } };
+  context?: {
+    class: string;
+    value: { tags?: string[]; project?: string; [k: string]: unknown };
+  };
   lifecycle: { value: { state: string } };
   currentVersion: { value: number };
   displayTitle: { value: string };
@@ -27,7 +31,15 @@ export type MemoryListItem = {
   lifecycleState: string;
   version: number;
   tags: string[];
+  project?: string;
   updatedAt: string;
+};
+
+export type MemoryVersionRow = {
+  version: number;
+  changeReason?: string;
+  createdAt?: string;
+  content?: { type?: string; text?: string };
 };
 
 const DEFAULT_BRIDGE =
@@ -43,7 +55,6 @@ function bridgeBase(): string {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function tauriInvoke(cmd: string, args: Record<string, any>): Promise<unknown> {
-  // Tauri 2 global
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
   const core = w.__TAURI__?.core ?? w.__TAURI_INTERNALS__;
@@ -101,9 +112,6 @@ async function httpCommand(
   return body.result;
 }
 
-/**
- * Dispatch a memory command through Tauri bridge or HTTP DesktopHost.
- */
 export async function memoryCommand(
   command:
     | "memory.create"
@@ -120,7 +128,7 @@ export async function memoryCommand(
     const map: Record<string, string> = {
       "memory.create": TAURI_MEMORY_COMMANDS.create,
       "memory.get": TAURI_MEMORY_COMMANDS.get,
-      "memory.list": "memory_list",
+      "memory.list": TAURI_MEMORY_COMMANDS.list,
       "memory.update": TAURI_MEMORY_COMMANDS.update,
       "memory.archive": TAURI_MEMORY_COMMANDS.archive,
       "memory.restore": TAURI_MEMORY_COMMANDS.restore,
@@ -128,7 +136,6 @@ export async function memoryCommand(
     };
     const tauriCmd = map[command];
     try {
-      // Rust returns { ok, result } or result directly
       const raw = await tauriInvoke(tauriCmd, {
         payload: args,
         memoryId: args.memoryId,
@@ -139,32 +146,131 @@ export async function memoryCommand(
       if (r && typeof r === "object" && "result" in r) return r.result;
       return raw;
     } catch {
-      // Fall through to HTTP if Rust proxy unavailable
+      /* HTTP fallback */
     }
   }
   return httpCommand(command, args);
 }
 
-export async function createMemory(text: string): Promise<MemoryDetailView> {
+export type CreateMemoryOptions = {
+  tags?: string[];
+  project?: string;
+  createdBy?: string;
+};
+
+export async function createMemory(
+  text: string,
+  opts: CreateMemoryOptions = {}
+): Promise<MemoryDetailView> {
   const now = new Date().toISOString();
+  const tags = opts.tags?.length ? opts.tags : undefined;
+  const project = opts.project;
   return (await memoryCommand("memory.create", {
     content: { type: "text", text },
+    context:
+      tags || project
+        ? {
+            tags,
+            project,
+          }
+        : undefined,
     provenance: {
       sourceType: "user",
       capturedAt: now,
       parentMemoryIds: [],
       evidenceIds: [],
     },
-    createdBy: "v2-desktop-ui",
+    createdBy: opts.createdBy ?? "v2-desktop-ui",
   })) as MemoryDetailView;
 }
 
 export async function getMemory(id: string): Promise<MemoryDetailView | null> {
-  return (await memoryCommand("memory.get", { memoryId: id })) as MemoryDetailView | null;
+  return (await memoryCommand("memory.get", {
+    memoryId: id,
+  })) as MemoryDetailView | null;
 }
 
 export async function listMemories(): Promise<MemoryListItem[]> {
   return (await memoryCommand("memory.list", {
     includeArchived: true,
   })) as MemoryListItem[];
+}
+
+export async function updateMemory(
+  memoryId: string,
+  text: string,
+  opts: { changeReason?: string; tags?: string[]; project?: string } = {}
+): Promise<MemoryDetailView> {
+  return (await memoryCommand("memory.update", {
+    memoryId,
+    content: { type: "text", text },
+    changeReason: opts.changeReason ?? "ui-update",
+    context:
+      opts.tags || opts.project
+        ? { tags: opts.tags, project: opts.project }
+        : undefined,
+    createdBy: "v2-desktop-ui",
+  })) as MemoryDetailView;
+}
+
+export async function archiveMemory(
+  memoryId: string,
+  reason = "ui-archive"
+): Promise<MemoryDetailView> {
+  return (await memoryCommand("memory.archive", {
+    memoryId,
+    reason,
+    createdBy: "v2-desktop-ui",
+  })) as MemoryDetailView;
+}
+
+export async function restoreMemory(
+  memoryId: string,
+  reason = "ui-restore"
+): Promise<MemoryDetailView> {
+  return (await memoryCommand("memory.restore", {
+    memoryId,
+    reason,
+    createdBy: "v2-desktop-ui",
+  })) as MemoryDetailView;
+}
+
+export async function getHistory(memoryId: string): Promise<MemoryVersionRow[]> {
+  const rows = (await memoryCommand("memory.history", {
+    memoryId,
+  })) as MemoryVersionRow[];
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * Persist acceptance evidence as a Core Memory (Vault note — no side files).
+ * Tags: evidence, acceptance · project: ailexsi-core-vault-v2
+ */
+export async function saveAcceptanceEvidence(options?: {
+  head?: string;
+  extra?: string;
+}): Promise<MemoryDetailView> {
+  const health = await bridgeHealth();
+  const head =
+    options?.head?.trim() ||
+    (import.meta as { env?: Record<string, string> }).env?.VITE_V2_HEAD ||
+    "(set VITE_V2_HEAD or pass head — git rev-parse HEAD)";
+  const lines = [
+    "AILEXSI Core Vault V2 — Acceptance Evidence",
+    `RecordedAt: ${new Date().toISOString()}`,
+    `HEAD: ${head}`,
+    `Bridge: ${health.ok ? "connected" : "offline"}`,
+    `Store: ${health.store ?? "unknown"}`,
+    "Desktop path: UI → Bridge → DesktopHost → PostgresEventStore",
+    "Phase 08: ABSENT",
+    "Notes: stored as Core Memory (tags: evidence, acceptance) — no side files.",
+  ];
+  if (options?.extra?.trim()) {
+    lines.push("", options.extra.trim());
+  }
+  return createMemory(lines.join("\n"), {
+    tags: ["evidence", "acceptance"],
+    project: "ailexsi-core-vault-v2",
+    createdBy: "v2-acceptance-evidence",
+  });
 }

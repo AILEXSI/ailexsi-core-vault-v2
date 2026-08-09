@@ -213,3 +213,80 @@ button.ghost {
   font-size: 0.9rem;
   overflow: auto;
 }
+
+.memory-form input[type="text"] {
+  width: 100%;
+  margin-top: 0.5rem;
+  background: #0b1020;
+  color: inherit;
+  border: 1px solid #33486f;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.6rem;
+}
+
+.row-actions button {
+  margin-top: 0;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #3d8f6e;
+  background: #163528;
+  color: #8dffc6;
+  cursor: pointer;
+  font: inherit;
+}
+
+.row-actions button.danger {
+  border-color: #8f3d3d;
+  background: #351616;
+  color: #ffb0b0;
+}
+
+.edit-area {
+  width: 100%;
+  resize: vertical;
+  background: #0b1020;
+  color: inherit;
+  border: 1px solid #33486f;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font: inherit;
+  margin-top: 0.5rem;
+}
+
+.subhead {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history-list li {
+  border-top: 1px solid #243049;
+  padding: 0.45rem 0;
+  font-size: 0.88rem;
+}
+
+.hist-snip {
+  margin-top: 0.2rem;
+  white-space: pre-wrap;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}

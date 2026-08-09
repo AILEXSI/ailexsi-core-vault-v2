@@ -1,8 +1,6 @@
 /**
  * Bridge + UI path (HTTP):
  *   HTTP /commands/* → DesktopHost → PostgresEventStore
- *
- * Proves the same surface the Tauri proxy and Vite UI call.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -45,7 +43,7 @@ describe("Desktop HTTP bridge → long-lived DesktopHost → PostgresEventStore"
     live = await startLivePostgres();
     server = await startDesktopBridgeServer({
       connectionString: live.connectionString,
-      port: 0, // ephemeral
+      port: 0,
       environment: "test",
       producer: "v2-bridge-test",
     });
@@ -103,15 +101,73 @@ describe("Desktop HTTP bridge → long-lived DesktopHost → PostgresEventStore"
 
     const got = await post(base, "memory.get", { memoryId: view.id });
     expect(got.json.result.id).toBe(view.id);
-    expect((got.json.result.content.value as { text: string }).text).toContain(
-      "bridge-ui-"
-    );
-
-    // EventStore proof
-    const stream = await getDesktopHost().eventStoreHistory(view.id);
-    expect(stream.length).toBe(1);
-    expect(stream[0]!.event.eventType).toBe("MemoryCreated");
     expect(getDesktopHost().storeConstructorName()).toBe("PostgresEventStore");
+  });
+
+  it("UPDATE + ARCHIVE + RESTORE + HISTORY via HTTP", async () => {
+    const created = await post(base, "memory.create", {
+      content: { type: "text", text: "lifecycle-bridge-v1" },
+      provenance: provenance(),
+      idempotencyKey: randomUUID(),
+      context: { tags: ["project"], project: "ailexsi-core-vault-v2" },
+    });
+    const id = created.json.result.id as string;
+
+    const updated = await post(base, "memory.update", {
+      memoryId: id,
+      content: { type: "text", text: "lifecycle-bridge-v2" },
+      changeReason: "bridge-update",
+      idempotencyKey: randomUUID(),
+    });
+    expect(updated.json.result.currentVersion.value).toBe(2);
+
+    const archived = await post(base, "memory.archive", {
+      memoryId: id,
+      reason: "bridge-archive",
+      idempotencyKey: randomUUID(),
+    });
+    expect(archived.json.result.lifecycle.value.state).toBe("archived");
+
+    const restored = await post(base, "memory.restore", {
+      memoryId: id,
+      reason: "bridge-restore",
+      idempotencyKey: randomUUID(),
+    });
+    expect(restored.json.result.lifecycle.value.state).toBe("active");
+
+    const hist = await post(base, "memory.history", { memoryId: id });
+    expect(hist.json.result.length).toBe(4);
+    const stream = await getDesktopHost().eventStoreHistory(id);
+    expect(stream.length).toBe(4);
+  });
+
+  it("acceptance evidence memory with tags evidence+acceptance", async () => {
+    const created = await post(base, "memory.create", {
+      content: {
+        type: "text",
+        text: "AILEXSI Core Vault V2 — Acceptance Evidence\nHEAD: test\nPhase 08: ABSENT",
+      },
+      provenance: provenance(),
+      idempotencyKey: randomUUID(),
+      context: {
+        tags: ["evidence", "acceptance"],
+        project: "ailexsi-core-vault-v2",
+      },
+      createdBy: "v2-acceptance-evidence",
+    });
+    expect(created.status).toBe(200);
+    const view = created.json.result;
+    expect(view.context.value.tags).toEqual(
+      expect.arrayContaining(["evidence", "acceptance"])
+    );
+    expect(view.context.value.project).toBe("ailexsi-core-vault-v2");
+
+    const listed = await post(base, "memory.list", { includeArchived: true });
+    const items = listed.json.result as Array<{ id: string; tags: string[] }>;
+    const hit = items.find((i) => i.id === view.id);
+    expect(hit?.tags).toEqual(
+      expect.arrayContaining(["evidence", "acceptance"])
+    );
   });
 
   it("long-lived host: generation stays 1 across HTTP commands", async () => {

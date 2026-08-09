@@ -186,3 +186,13 @@ UI → HTTP bridge (or Tauri invoke → Rust proxy)
 
 Proof: `npm run test:bridge` and `npm run acceptance`.
 
+## Memory UI (Slice B)
+
+In **Memory**:
+
+- Create / List / Get / **Update** / **Archive** / **Restore** / **History**
+- Tags + project on create
+- **Acceptance-Evidence speichern** → Core Memory with tags `evidence`, `acceptance` (no side files)
+
+All mutations: Bridge → DesktopHost → PostgresEventStore only.
+

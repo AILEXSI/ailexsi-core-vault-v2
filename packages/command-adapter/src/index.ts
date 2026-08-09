@@ -21,3 +21,11 @@ export {
   type CoreRuntime,
   type CreateCoreRuntimeOptions,
 } from "./core-runtime.js";
+export {
+  DesktopHost,
+  getDesktopHost,
+  resetDesktopHostForTests,
+  invokeDesktopCommand,
+  type DesktopMemoryCommand,
+  type DesktopHostStartOptions,
+} from "./desktop-host.js";

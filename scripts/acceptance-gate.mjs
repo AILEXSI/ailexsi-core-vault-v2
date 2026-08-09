@@ -1,17 +1,20 @@
 /**
- * Foundation acceptance gate.
+ * V2 acceptance gate — Foundation + Slice A Desktop command path.
  *
  * GREEN requires:
- *   - baseline pins correct
- *   - Core/Vault checkouts clean at pins
- *   - unit + mock integration tests PASS
- *   - dual-write guard PASS
- *   - LIVE Postgres + Core PostgresEventStore suite PASS
- *     (CORE_DATABASE_URL or embedded-postgres real binaries)
- *   - no Phase 08 Physics implementation in V2
+ *   1. Foundation gates PASS
+ *   2. Core/Vault baseline pins unchanged
+ *   3. Core/Vault checkouts clean
+ *   4. no Phase 08
+ *   5. no dual-write
+ *   6. unit/mock suite PASS
+ *   7. live PostgreSQL foundation suite PASS
+ *   8. Desktop command-path suite PASS
+ *   9. Desktop path reaches PostgresEventStore
+ *  10–12. covered by desktop suite (persist, read model, AAS-54)
  *
- * If live suite cannot prove EventStore path → VERIFICATION PENDING (exit 2)
- * If hard failures → BLOCKED (exit 1)
+ * Live/desktop cannot run → VERIFICATION PENDING (exit 2)
+ * Hard failures → BLOCKED (exit 1)
  */
 
 import { execSync } from "node:child_process";
@@ -26,7 +29,7 @@ const baselines = JSON.parse(
 
 const gates = [];
 let livePostgres = false;
-let liveDetail = "";
+let desktopPath = false;
 
 function gate(name, ok, detail = "") {
   gates.push({ name, ok: !!ok, detail });
@@ -46,8 +49,19 @@ function walkTs(dir, out = []) {
     const full = path.join(dir, name);
     const st = statSync(full);
     if (st.isDirectory()) walkTs(full, out);
-    else if (/\.(ts|tsx|mjs|js)$/.test(name)) out.push(full);
+    else if (/\.(ts|tsx|mjs|js|rs)$/.test(name)) out.push(full);
   }
+  return out;
+}
+
+function runVitest(args, timeoutMs = 300_000) {
+  const out = execSync(`npx vitest run --config vitest.config.ts ${args}`, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env },
+    timeout: timeoutMs,
+  });
   return out;
 }
 
@@ -74,7 +88,7 @@ console.log(
 console.log(`CORE PIN:    ${baselines.core.sha}`);
 console.log(`VAULT PIN:   ${baselines.vaultReference.sha}`);
 
-// --- structural gates ---
+// --- structural ---
 gate(
   "CORE BASELINE IDENTIFIED",
   baselines.core.sha === "652d01eb06dd0841c3b475023883675af6dcd698",
@@ -90,9 +104,24 @@ gate(
   "V2 STRUCTURE PRESENT",
   existsSync(path.join(root, "packages/command-adapter/src/index.ts")) &&
     existsSync(path.join(root, "packages/command-adapter/src/core-runtime.ts")) &&
+    existsSync(path.join(root, "packages/command-adapter/src/desktop-host.ts")) &&
     existsSync(path.join(root, "docs/SOURCE-OF-TRUTH.md")) &&
     existsSync(path.join(root, "docs/BASELINES.md")) &&
     existsSync(path.join(root, "docs/adr/001-source-of-truth.md"))
+);
+gate(
+  "DESKTOP HOST + IPC SURFACE PRESENT",
+  existsSync(path.join(root, "packages/command-adapter/src/desktop-host.ts")) &&
+    existsSync(path.join(root, "apps/desktop/src/ipc/memory-api.ts")) &&
+    existsSync(path.join(root, "apps/desktop/src-tauri/src/lib.rs")) &&
+    readFileSync(
+      path.join(root, "apps/desktop/src-tauri/src/lib.rs"),
+      "utf8"
+    ).includes("memory_create") &&
+    readFileSync(
+      path.join(root, "packages/command-adapter/src/desktop-host.ts"),
+      "utf8"
+    ).includes("invokeDesktopCommand")
 );
 gate(
   "DATABASE CONFIG VERIFIED",
@@ -138,7 +167,7 @@ gate(
   dirty(vaultPath) ? "dirty" : "clean-or-missing"
 );
 
-// --- dual-write static check ---
+// dual-write
 const forbidden = [
   /dualWrite\s*\(/i,
   /saveCanonicalToFs\s*\(/i,
@@ -161,7 +190,7 @@ gate(
   dualHits.length ? dualHits.join(", ") : "clean"
 );
 
-// --- Phase 08 ---
+// Phase 08
 const phase08Hits = [];
 for (const file of walkTs(path.join(root, "packages"))) {
   const text = readFileSync(file, "utf8");
@@ -175,79 +204,144 @@ gate(
   phase08Hits.length ? phase08Hits.join(", ") : "no Phase 08 implementation"
 );
 
-// --- unit + mock integration (exclude live) ---
+// silent skip scan on acceptance/desktop tests
+const skipHits = [];
+for (const file of walkTs(path.join(root, "tests"))) {
+  const text = readFileSync(file, "utf8");
+  if (
+    /\b(describe|it|test)\.skip\s*\(/.test(text) ||
+    /\bxit\s*\(/.test(text) ||
+    /\bxdescribe\s*\(/.test(text)
+  ) {
+    skipHits.push(path.relative(root, file));
+  }
+}
+gate(
+  "NO SILENT TEST SKIPS IN SUITE",
+  skipHits.length === 0,
+  skipHits.length ? skipHits.join(", ") : "clean"
+);
+
+// per-command runtime anti-pattern in desktop-host
+const hostSrc = readFileSync(
+  path.join(root, "packages/command-adapter/src/desktop-host.ts"),
+  "utf8"
+);
+const perCommandRuntime =
+  /async memoryCreate[\s\S]*createCoreRuntime/.test(hostSrc) ||
+  /memoryCreate[\s\S]{0,200}createCoreRuntime/.test(hostSrc);
+gate(
+  "NO PER-COMMAND createCoreRuntime IN DESKTOP HOST",
+  !perCommandRuntime && hostSrc.includes("if (this.runtime)") && hostSrc.includes("start("),
+  perCommandRuntime ? "detected" : "long-lived start() only"
+);
+
+// unit + mock (exclude live suites)
 let unitOk = false;
 let unitDetail = "";
 try {
-  const out = execSync(
-    "npx vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts",
-    { cwd: root, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
+  const out = runVitest(
+    "--exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts"
   );
   unitOk = true;
   unitDetail = out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
   console.log(out);
 } catch (e) {
   unitOk = false;
-  unitDetail = (e.stdout?.toString?.() || e.message || "").slice(0, 400);
+  unitDetail = (e.stdout?.toString?.() || e.message || "").slice(0, 600);
   console.error(e.stdout?.toString?.() || e.message);
 }
 gate("UNIT+MOCK INTEGRATION TESTS", unitOk, unitDetail.trim().slice(0, 200));
 
-// --- LIVE postgres suite (env URL or embedded real PG) ---
+// live foundation suite
 let liveTestOk = false;
 let liveTestDetail = "";
 try {
-  const out = execSync(
-    "npx vitest run --config vitest.config.ts tests/integration/live-postgres-memory.test.ts",
-    {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
-      timeout: 300_000,
-    }
-  );
+  const out = runVitest("tests/integration/live-postgres-memory.test.ts");
   liveTestOk = true;
   livePostgres = true;
   liveTestDetail =
     out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
-  // Detect mode from output if present
-  if (out.includes("PostgresEventStore")) {
-    liveDetail = "PostgresEventStore proven via live suite";
-  } else {
-    liveDetail = "live suite passed";
-  }
   console.log(out);
 } catch (e) {
   liveTestOk = false;
   livePostgres = false;
-  liveTestDetail = (e.stdout?.toString?.() || e.stderr?.toString?.() || e.message || "").slice(
-    0,
-    800
-  );
-  liveDetail = liveTestDetail.slice(0, 200);
+  liveTestDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 800);
   console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
 }
-gate("LIVE POSTGRES + CORE EVENTSTORE", liveTestOk, liveTestDetail.trim().slice(0, 240));
+gate(
+  "LIVE POSTGRES + CORE EVENTSTORE",
+  liveTestOk,
+  liveTestDetail.trim().slice(0, 240)
+);
 gate(
   "COMMAND ADAPTER CREATES MEMORY VIA CORE EVENTSTORE",
   liveTestOk,
-  liveTestOk ? "proven by live-postgres-memory suite" : liveDetail
+  liveTestOk ? "proven by live-postgres-memory suite" : liveTestDetail.slice(0, 120)
+);
+
+// desktop command path suite
+let desktopOk = false;
+let desktopDetail = "";
+try {
+  const out = runVitest("tests/integration/desktop-command-path.test.ts");
+  desktopOk = true;
+  desktopPath = true;
+  desktopDetail =
+    out.split("\n").filter((l) => l.includes("Tests")).pop() ?? "ok";
+  console.log(out);
+} catch (e) {
+  desktopOk = false;
+  desktopPath = false;
+  desktopDetail = (
+    e.stdout?.toString?.() ||
+    e.stderr?.toString?.() ||
+    e.message ||
+    ""
+  ).slice(0, 800);
+  console.error(e.stdout?.toString?.() || e.stderr?.toString?.() || e.message);
+}
+gate(
+  "DESKTOP COMMAND-PATH SUITE",
+  desktopOk,
+  desktopDetail.trim().slice(0, 240)
+);
+gate(
+  "DESKTOP PATH REACHES PostgresEventStore",
+  desktopOk,
+  desktopOk
+    ? "store.constructor.name === PostgresEventStore (desktop suite)"
+    : desktopDetail.slice(0, 120)
+);
+gate(
+  "DESKTOP AAS-54 REPLAY",
+  desktopOk,
+  desktopOk
+    ? "CLEAR → REBUILD → IDENTICAL via desktop IPC path"
+    : "desktop suite failed"
 );
 
 const failed = gates.filter((g) => !g.ok);
-const hardFailed = failed.filter(
-  (g) =>
-    g.name !== "LIVE POSTGRES + CORE EVENTSTORE" &&
-    g.name !== "COMMAND ADAPTER CREATES MEMORY VIA CORE EVENTSTORE"
-);
+const softLive = new Set([
+  "LIVE POSTGRES + CORE EVENTSTORE",
+  "COMMAND ADAPTER CREATES MEMORY VIA CORE EVENTSTORE",
+  "DESKTOP COMMAND-PATH SUITE",
+  "DESKTOP PATH REACHES PostgresEventStore",
+  "DESKTOP AAS-54 REPLAY",
+]);
+const hardFailed = failed.filter((g) => !softLive.has(g.name));
 
 let status;
 let exitCode;
 if (hardFailed.length > 0) {
   status = "BLOCKED";
   exitCode = 1;
-} else if (!liveTestOk) {
+} else if (!liveTestOk || !desktopOk) {
   status = "VERIFICATION PENDING";
   exitCode = 2;
 } else if (failed.length === 0) {
@@ -262,6 +356,7 @@ console.log("\n========================================");
 console.log("AILEXSI CORE VAULT V2 — ACCEPTANCE GATE");
 console.log(`FINAL STATUS: ${status}`);
 console.log(`LIVE POSTGRES: ${livePostgres ? "yes" : "no"}`);
+console.log(`DESKTOP PATH: ${desktopPath ? "yes" : "no"}`);
 console.log(`PHASE 08 CODE PRESENT: NO`);
 console.log(`Failed gates: ${failed.length}`);
 if (failed.length) {

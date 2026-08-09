@@ -162,8 +162,8 @@ export function App() {
               <p className="muted">{active.blurb}</p>
               {active.id === "memory" && (
                 <p className="muted">
-                  Command path: User → V2 Command → Validation → IdempotencyKey →
-                  Core MemoryDomain → EventStore → Projection → V2 Read Model → UI.
+                  Slice A path: Tauri/IPC → long-lived DesktopHost → createCoreRuntime →
+                  MemoryCommandAdapter → PostgresEventStore → Projection → V2 Read Model.
                 </p>
               )}
             </div>

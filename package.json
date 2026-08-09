@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "AILEXSI Core Vault V2 — new generation Vault on verified Core Cortex baseline",
+  "description": "AILEXSI Core Vault V2 \u2014 new generation Vault on verified Core Cortex baseline",
   "packageManager": "pnpm@9.12.0",
   "scripts": {
     "setup:core": "node scripts/setup-core-deps.mjs",
@@ -12,16 +12,17 @@
     "db:probe": "node scripts/probe-postgres.mjs",
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts",
+    "test": "vitest run --config vitest.config.ts --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts",
     "test:unit": "vitest run --config vitest.config.ts tests/unit",
-    "test:integration": "vitest run --config vitest.config.ts tests/integration --exclude tests/integration/live-postgres-memory.test.ts",
+    "test:integration": "vitest run --config vitest.config.ts tests/integration --exclude tests/integration/live-postgres-memory.test.ts --exclude tests/integration/desktop-command-path.test.ts",
     "test:live": "vitest run --config vitest.config.ts tests/integration/live-postgres-memory.test.ts",
     "test:all": "vitest run --config vitest.config.ts",
     "test:migration": "vitest run --config vitest.config.ts tests/migration",
     "test:acceptance": "vitest run --config vitest.config.ts tests/acceptance",
     "acceptance": "node scripts/acceptance-gate.mjs",
     "desktop:dev": "npm run dev --prefix apps/desktop",
-    "desktop:build": "npm run build --prefix apps/desktop"
+    "desktop:build": "npm run build --prefix apps/desktop",
+    "test:desktop": "vitest run --config vitest.config.ts tests/integration/desktop-command-path.test.ts"
   },
   "workspaces": [
     "packages/*",

@@ -143,3 +143,18 @@ npm run acceptance
 ## License
 
 MIT — AILEXSI
+
+## Slice A — Desktop command path
+
+Long-lived process host:
+
+```text
+Desktop startup → createCoreRuntime() once
+memory.create|get|update|archive|restore|history via invokeDesktopCommand
+→ MemoryCommandAdapter → PostgresEventStore → Projection → V2 Read Model
+Desktop shutdown → runtime.close()
+```
+
+Proof: `npm run test:desktop` (live PostgreSQL / embedded-postgres).
+Acceptance: `npm run acceptance` requires desktop suite + foundation live suite.
+

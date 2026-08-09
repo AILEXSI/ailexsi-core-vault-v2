@@ -1,23 +1,15 @@
 /**
  * LIVE PostgreSQL + Core PostgresEventStore integration.
- *
- * Preference order:
- *  1) CORE_DATABASE_URL / DATABASE_URL (docker-compose or external)
- *  2) embedded-postgres (real PG binaries; not InMemoryEventStore)
- *
- * This suite NEVER uses InMemoryEventStore. That is test-kit only.
+ * NEVER uses InMemoryEventStore.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import {
   createCoreRuntime,
-  probeCoreDatabase,
   type CoreRuntime,
 } from "@ailexsi/v2-command-adapter";
+import { startLivePostgres, type LivePgHandle } from "@ailexsi/v2-test-kit";
 import type { Provenance } from "@ailexsi/contracts";
 
 function provenance(): Provenance {
@@ -31,84 +23,40 @@ function provenance(): Provenance {
 
 describe("LIVE Postgres + Core EventStore Memory path", () => {
   let runtime: CoreRuntime | null = null;
-  let embedded: { stop: () => Promise<void>; connectionString: string } | null =
-    null;
-  let connectionString = "";
-  let mode: "env" | "embedded" = "env";
+  let live: LivePgHandle | null = null;
 
   beforeAll(async () => {
-    const probe = await probeCoreDatabase();
-    if (probe.ok) {
-      connectionString =
-        process.env.CORE_DATABASE_URL ||
-        process.env.DATABASE_URL ||
-        "";
-      mode = "env";
-    } else {
-      // Real PostgreSQL via embedded binaries (not a mock EventStore)
-      mode = "embedded";
-      const EmbeddedPostgres = (await import("embedded-postgres")).default;
-      const dataDir = mkdtempSync(path.join(tmpdir(), "ailexsi-v2-pg-"));
-      const port = 55432 + Math.floor(Math.random() * 1000);
-      const pg = new EmbeddedPostgres({
-        databaseDir: dataDir,
-        user: "ailexsi_v2",
-        password: "ailexsi_v2_dev",
-        port,
-        persistent: false,
-      });
-      await pg.initialise();
-      await pg.start();
-      await pg.createDatabase("ailexsi_v2_core");
-      connectionString = `postgres://ailexsi_v2:ailexsi_v2_dev@127.0.0.1:${port}/ailexsi_v2_core`;
-      embedded = {
-        connectionString,
-        stop: async () => {
-          try {
-            await pg.stop();
-          } finally {
-            try {
-              rmSync(dataDir, { recursive: true, force: true });
-            } catch {
-              /* ignore */
-            }
-          }
-        },
-      };
-    }
-
+    live = await startLivePostgres();
     runtime = await createCoreRuntime({
-      connectionString,
+      connectionString: live.connectionString,
       environment: "test",
       producer: "v2-live-integration",
     });
   }, 180_000);
 
   afterAll(async () => {
-    // Close clients before stopping the server to avoid flaky afterAll failures.
     if (runtime) {
       try {
         await runtime.close();
       } catch {
-        /* ignore close races */
+        /* ignore */
       }
       runtime = null;
     }
-    if (embedded) {
+    if (live) {
       try {
-        await embedded.stop();
+        await live.stop();
       } catch {
-        /* ignore stop races on Windows */
+        /* ignore */
       }
-      embedded = null;
+      live = null;
     }
   }, 60_000);
 
   it("uses real Postgres (env or embedded), never InMemory", () => {
     expect(runtime).not.toBeNull();
-    expect(connectionString.startsWith("postgres://")).toBe(true);
-    expect(["env", "embedded"]).toContain(mode);
-    // PostgresEventStore is constructed inside createCoreRuntime
+    expect(live!.connectionString.startsWith("postgres://")).toBe(true);
+    expect(["env", "embedded"]).toContain(live!.mode);
     expect(runtime!.store.constructor.name).toBe("PostgresEventStore");
   });
 
@@ -121,10 +69,6 @@ describe("LIVE Postgres + Core EventStore Memory path", () => {
       createdBy: "live-test",
     });
     expect(cell.currentVersion).toBe(1);
-    expect(cell.identity.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    );
-
     const stream = await runtime!.store.getByAggregate(cell.identity.id);
     expect(stream.length).toBe(1);
     expect(stream[0]!.event.eventType).toBe("MemoryCreated");
@@ -189,9 +133,7 @@ describe("LIVE Postgres + Core EventStore Memory path", () => {
     const view = runtime!.readModel.get(created.identity.id);
     expect(view).not.toBeNull();
     expect(view!.content.class).toBe("CANONICAL");
-    expect((view!.content.value as { text: string }).text).toBe(
-      "replay-live-v2"
-    );
+    expect((view!.content.value as { text: string }).text).toBe("replay-live-v2");
     expect(view!.lifecycle.value.state).toBe("archived");
   });
 

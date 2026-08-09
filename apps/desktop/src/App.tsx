@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { MemoryPanel } from "./components/MemoryPanel";
+import { CultivationPanel } from "./components/CultivationPanel";
 
 type DomainView =
   | "overview"
@@ -76,17 +77,17 @@ const DOMAINS: Array<{
     id: "continuity",
     label: "Continuity",
     classification: "V2-DERIVED",
-    status: "VERIFIED",
+    status: "PARTIAL",
     blurb:
-      "Derived portable artifact with CORE-CANONICAL / V2-DERIVED / V2-EPHEMERAL field classes.",
+      "BACKEND GREEN (package/rehydrate). UI panel not exposed — host commands only.",
   },
   {
     id: "cultivation",
     label: "Cultivation",
     classification: "V2-LOCAL",
-    status: "VERIFIED",
+    status: "PARTIAL",
     blurb:
-      "Ollama/mock LLM proposals. Acceptance → Core command only. No auto-canonical AI writes.",
+      "BACKEND GREEN + UI co-creation surface (pending DCS freeze). Mock LLM; human accept only.",
   },
 ];
 
@@ -162,6 +163,8 @@ export function App() {
           </>
         ) : active?.id === "memory" ? (
           <MemoryPanel />
+        ) : active?.id === "cultivation" ? (
+          <CultivationPanel />
         ) : (
           active && (
             <div className="card">

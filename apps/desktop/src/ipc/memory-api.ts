@@ -1,7 +1,25 @@
 /**
- * Desktop Memory API — shared command names for Tauri invoke and Node DesktopHost.
+ * Desktop command names shared by Tauri invoke, HTTP bridge, and DesktopHost.
  */
 
+export type DesktopHostCommandName =
+  | "memory.create"
+  | "memory.get"
+  | "memory.list"
+  | "memory.update"
+  | "memory.archive"
+  | "memory.restore"
+  | "memory.history"
+  | "memory.retrieve"
+  | "memory.context"
+  | "cultivation.session.create"
+  | "cultivation.session.get"
+  | "cultivation.chat"
+  | "cultivation.proposal.reject"
+  | "cultivation.proposal.defer"
+  | "cultivation.proposal.accept";
+
+/** @deprecated alias — Memory-only surface retained for callers */
 export type MemoryCommandName =
   | "memory.create"
   | "memory.get"
@@ -11,7 +29,7 @@ export type MemoryCommandName =
   | "memory.restore"
   | "memory.history";
 
-/** Tauri command identifiers (snake_case invoke names). */
+/** Tauri command identifiers (snake_case). Only Memory CRUD is registered in Rust today. */
 export const TAURI_MEMORY_COMMANDS = {
   create: "memory_create",
   get: "memory_get",

@@ -8,7 +8,7 @@
  * Never stores canonical memory in UI state as authority.
  */
 
-import { TAURI_MEMORY_COMMANDS } from "./memory-api";
+import { TAURI_MEMORY_COMMANDS, type DesktopHostCommandName } from "./memory-api";
 
 export type MemoryDetailView = {
   id: string;
@@ -116,6 +116,46 @@ async function httpCommand(
   return body.result;
 }
 
+/**
+ * Invoke any allowlisted DesktopHost command via Tauri (memory CRUD only)
+ * or HTTP bridge (full surface including retrieve/context/cultivation).
+ */
+export async function hostCommand(
+  command: DesktopHostCommandName,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  args: Record<string, any> = {}
+): Promise<unknown> {
+  if (await isTauri()) {
+    const map: Partial<Record<DesktopHostCommandName, string>> = {
+      "memory.create": TAURI_MEMORY_COMMANDS.create,
+      "memory.get": TAURI_MEMORY_COMMANDS.get,
+      "memory.list": TAURI_MEMORY_COMMANDS.list,
+      "memory.update": TAURI_MEMORY_COMMANDS.update,
+      "memory.archive": TAURI_MEMORY_COMMANDS.archive,
+      "memory.restore": TAURI_MEMORY_COMMANDS.restore,
+      "memory.history": TAURI_MEMORY_COMMANDS.history,
+    };
+    const tauriCmd = map[command];
+    if (tauriCmd) {
+      try {
+        const raw = await tauriInvoke(tauriCmd, {
+          payload: args,
+          memoryId: args.memoryId,
+          memory_id: args.memoryId,
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = raw as any;
+        if (r && typeof r === "object" && "result" in r) return r.result;
+        return raw;
+      } catch {
+        /* HTTP fallback */
+      }
+    }
+  }
+  return httpCommand(command, args);
+}
+
+/** @deprecated prefer hostCommand — Memory CRUD subset */
 export async function memoryCommand(
   command:
     | "memory.create"
@@ -128,32 +168,7 @@ export async function memoryCommand(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: Record<string, any> = {}
 ): Promise<unknown> {
-  if (await isTauri()) {
-    const map: Record<string, string> = {
-      "memory.create": TAURI_MEMORY_COMMANDS.create,
-      "memory.get": TAURI_MEMORY_COMMANDS.get,
-      "memory.list": TAURI_MEMORY_COMMANDS.list,
-      "memory.update": TAURI_MEMORY_COMMANDS.update,
-      "memory.archive": TAURI_MEMORY_COMMANDS.archive,
-      "memory.restore": TAURI_MEMORY_COMMANDS.restore,
-      "memory.history": TAURI_MEMORY_COMMANDS.history,
-    };
-    const tauriCmd = map[command];
-    try {
-      const raw = await tauriInvoke(tauriCmd, {
-        payload: args,
-        memoryId: args.memoryId,
-        memory_id: args.memoryId,
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const r = raw as any;
-      if (r && typeof r === "object" && "result" in r) return r.result;
-      return raw;
-    } catch {
-      /* HTTP fallback */
-    }
-  }
-  return httpCommand(command, args);
+  return hostCommand(command, args);
 }
 
 export type CreateMemoryOptions = {
@@ -277,4 +292,63 @@ export async function saveAcceptanceEvidence(options?: {
     project: "ailexsi-core-vault-v2",
     createdBy: "v2-acceptance-evidence",
   });
+}
+
+
+// ---- Co-creation surface (HTTP bridge / hostCommand) ----
+
+export async function retrieveMemories(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: Record<string, any> = {}
+): Promise<unknown> {
+  return hostCommand("memory.retrieve", query);
+}
+
+export async function assembleMemoryContext(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  args: Record<string, any>
+): Promise<unknown> {
+  return hostCommand("memory.context", args);
+}
+
+export async function cultivationSessionCreate(): Promise<{ id: string }> {
+  return (await hostCommand("cultivation.session.create", {})) as { id: string };
+}
+
+export async function cultivationSessionGet(
+  sessionId: string
+): Promise<unknown> {
+  return hostCommand("cultivation.session.get", { sessionId });
+}
+
+export async function cultivationChat(args: {
+  sessionId: string;
+  text: string;
+  memoryIds?: string[];
+  targetMemoryId?: string;
+}): Promise<unknown> {
+  return hostCommand("cultivation.chat", args);
+}
+
+export async function cultivationProposalReject(
+  sessionId: string,
+  proposalId: string
+): Promise<unknown> {
+  return hostCommand("cultivation.proposal.reject", { sessionId, proposalId });
+}
+
+export async function cultivationProposalDefer(
+  sessionId: string,
+  proposalId: string
+): Promise<unknown> {
+  return hostCommand("cultivation.proposal.defer", { sessionId, proposalId });
+}
+
+export async function cultivationProposalAccept(args: {
+  sessionId: string;
+  proposalId: string;
+  editedText?: string;
+  idempotencyKey?: string;
+}): Promise<unknown> {
+  return hostCommand("cultivation.proposal.accept", args);
 }

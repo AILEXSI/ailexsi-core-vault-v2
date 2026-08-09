@@ -32,7 +32,10 @@ export type DesktopMemoryCommand =
   | "memory.restore"
   | "memory.history"
   | "memory.retrieve"
-  | "memory.context";
+  | "memory.context"
+  | "continuity.export"
+  | "continuity.inspect"
+  | "continuity.rehydrate";
 
 export interface DesktopHostStartOptions extends CreateCoreRuntimeOptions {
   /** Optional fixed connection string (tests). */
@@ -255,6 +258,34 @@ export class DesktopHost {
     };
   }
 
+  async continuityExport(args: Record<string, unknown>) {
+    const rt = this.requireRuntime();
+    this.commandCount += 1;
+    const selection = args.selection as import("@ailexsi/v2-continuity").ContinuitySelection;
+    if (!selection?.mode) throw new Error("continuity.export requires selection.mode");
+    return rt.continuity.exportPackage({
+      selection,
+      generatedAt: args.generatedAt as string | undefined,
+      includeInspection: args.includeInspection as boolean | undefined,
+    });
+  }
+
+  async continuityInspect(args: Record<string, unknown>) {
+    const rt = this.requireRuntime();
+    this.commandCount += 1;
+    const pkg = args.package ?? args.pkg;
+    if (pkg == null) throw new Error("continuity.inspect requires package");
+    return rt.continuity.inspect(pkg as never);
+  }
+
+  async continuityRehydrate(args: Record<string, unknown>) {
+    const rt = this.requireRuntime();
+    this.commandCount += 1;
+    const pkg = args.package ?? args.pkg;
+    if (pkg == null) throw new Error("continuity.rehydrate requires package");
+    return rt.continuity.rehydrateVerify(pkg as never);
+  }
+
   async memoryRetrieve(
     query: import("./memory-retrieval.js").RetrieveMemoriesQuery
   ) {
@@ -364,6 +395,12 @@ export async function invokeDesktopCommand(
       return host.memoryContext(
         args as import("./memory-retrieval.js").AssembleContextSpec
       );
+    case "continuity.export":
+      return host.continuityExport(args);
+    case "continuity.inspect":
+      return host.continuityInspect(args);
+    case "continuity.rehydrate":
+      return host.continuityRehydrate(args);
     default: {
       const _exhaustive: never = command;
       throw new Error(`Unknown desktop command: ${String(_exhaustive)}`);

@@ -64,6 +64,9 @@ const COMMANDS = new Set<DesktopMemoryCommand>([
   "memory.history",
   "memory.retrieve",
   "memory.context",
+  "continuity.export",
+  "continuity.inspect",
+  "continuity.rehydrate",
 ]);
 
 /**

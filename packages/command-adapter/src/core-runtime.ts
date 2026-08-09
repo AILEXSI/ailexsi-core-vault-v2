@@ -16,6 +16,7 @@ import type { EventStore } from "@ailexsi/eventstore";
 import { MemoryProjection, ProjectionEngine } from "@ailexsi/projections";
 import { MemoryCommandAdapter } from "./memory-command-adapter.js";
 import { MemoryQueryService } from "./memory-query-service.js";
+import { ContinuityService } from "./continuity-service.js";
 import { MemoryReadModel } from "@ailexsi/v2-read-models";
 
 export interface CoreRuntime {
@@ -27,6 +28,7 @@ export interface CoreRuntime {
   readModel: MemoryReadModel;
   /** Core-backed query surface (read-only). */
   queries: MemoryQueryService;
+  continuity: ContinuityService;
   /** Close Postgres client. */
   close: () => Promise<void>;
   /**
@@ -45,6 +47,9 @@ export interface CreateCoreRuntimeOptions {
   environment?: "development" | "test" | "production";
   /** When false, skip migrate() (caller already migrated). Default true. */
   migrate?: boolean;
+  /** Continuity package provenance pins (defaults: env or well-known freeze pins). */
+  coreBaselineSha?: string;
+  vaultReferenceSha?: string;
 }
 
 export function resolveCoreDatabaseUrl(
@@ -126,6 +131,21 @@ export async function createCoreRuntime(
     rebuildAll,
   });
 
+  const coreBaselineSha =
+    options.coreBaselineSha ??
+    process.env.AILEXSI_CORE_PIN ??
+    "652d01eb06dd0841c3b475023883675af6dcd698";
+  const vaultReferenceSha =
+    options.vaultReferenceSha ??
+    process.env.AILEXSI_VAULT_PIN ??
+    "061e444389090c54e431b0e8243e82764f2c198e";
+
+  const continuity = new ContinuityService({
+    queries,
+    coreBaselineSha,
+    vaultReferenceSha,
+  });
+
   return {
     database,
     store,
@@ -134,6 +154,7 @@ export async function createCoreRuntime(
     projectionEngine,
     readModel,
     queries,
+    continuity,
     close: async () => {
       await database.client.end({ timeout: 5 });
     },

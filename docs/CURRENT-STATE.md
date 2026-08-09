@@ -48,6 +48,7 @@ See `evidence/README.md`.
 ## Next
 
 - **Phase 4.1** — evidence emission (tooling) — this layer  
-- **Phase 5+** cognitive capabilities — **not yet authorized / not implemented**
+- **Continuity Foundation v1** — implementation on main after freeze (pending live GREEN)
+- **Phase 5+ Cultivation/Connectome** — not authorized until Continuity frozen
 
 Phase 08 Physics: **ABSENT**

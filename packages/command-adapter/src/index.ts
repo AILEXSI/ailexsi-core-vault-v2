@@ -61,3 +61,10 @@ export {
   type ContextItem,
 } from "./memory-retrieval.js";
 
+export {
+  ContinuityService,
+  type ContinuityExportSpec,
+  type ContinuityRehydrateResult,
+  type ContinuityServiceDeps,
+} from "./continuity-service.js";
+

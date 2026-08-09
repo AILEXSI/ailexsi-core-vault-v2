@@ -57,9 +57,12 @@ describe("PHASE 4 — MEMORY RETRIEVAL + CONTEXT GATE", () => {
   });
 
   it("empty retrieval", async () => {
-    const iso = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("retrieval gate requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     const rt = await createCoreRuntime({
-      connectionString: iso.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-p4-empty",
     });
@@ -71,14 +74,16 @@ describe("PHASE 4 — MEMORY RETRIEVAL + CONTEXT GATE", () => {
       expect(page.class).toBe("DERIVED");
     } finally {
       await rt.close();
-      await iso.stop();
     }
   }, 120_000);
 
   it("hard filters + deterministic order + repeated identical", async () => {
-    const iso = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("retrieval gate requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     const rt = await createCoreRuntime({
-      connectionString: iso.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-p4-filter",
     });
@@ -156,14 +161,16 @@ describe("PHASE 4 — MEMORY RETRIEVAL + CONTEXT GATE", () => {
       expect(a).toEqual(b);
     } finally {
       await rt.close();
-      await iso.stop();
     }
   }, 180_000);
 
   it("pagination no dups/gaps", async () => {
-    const iso = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("retrieval gate requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     const rt = await createCoreRuntime({
-      connectionString: iso.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-p4-page",
     });
@@ -193,14 +200,16 @@ describe("PHASE 4 — MEMORY RETRIEVAL + CONTEXT GATE", () => {
       expect(seen).toEqual(full.items.map((i) => i.id));
     } finally {
       await rt.close();
-      await iso.stop();
     }
   }, 180_000);
 
   it("context assembly + budget + deterministic + no new UUIDs", async () => {
-    const iso = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("retrieval gate requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     const rt = await createCoreRuntime({
-      connectionString: iso.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-p4-ctx",
     });
@@ -245,14 +254,16 @@ describe("PHASE 4 — MEMORY RETRIEVAL + CONTEXT GATE", () => {
       expect(tight.charCount).toBeLessThanOrEqual(120);
     } finally {
       await rt.close();
-      await iso.stop();
     }
   }, 180_000);
 
   it("rebuild equivalence + no-write eventCount", async () => {
-    const iso = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("retrieval gate requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     const rt = await createCoreRuntime({
-      connectionString: iso.connectionString,
+      connectionString: isoUrl,
       environment: "test",
       producer: "v2-p4-rebuild",
     });
@@ -298,17 +309,19 @@ describe("PHASE 4 — MEMORY RETRIEVAL + CONTEXT GATE", () => {
       expect(await rt.queries.eventCount()).toBe(before);
     } finally {
       await rt.close();
-      await iso.stop();
     }
   }, 180_000);
 
   it("Desktop E2E memory.retrieve + memory.context long-lived", async () => {
     resetDesktopHostForTests();
     const host: DesktopHost = getDesktopHost();
-    const iso = await startLivePostgres();
+    if (!live?.newDatabase) {
+      throw new Error("retrieval gate requires live.newDatabase() isolation");
+    }
+    const isoUrl = await live.newDatabase();
     try {
       await host.start({
-        connectionString: iso.connectionString,
+        connectionString: isoUrl,
         environment: "test",
         producer: "v2-p4-desktop",
       });
@@ -346,7 +359,6 @@ describe("PHASE 4 — MEMORY RETRIEVAL + CONTEXT GATE", () => {
       } catch {
         /* ignore */
       }
-      await iso.stop();
     }
   }, 180_000);
 });

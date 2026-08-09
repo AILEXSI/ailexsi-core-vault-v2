@@ -48,6 +48,20 @@ V2 uses an **explicit local development dependency**:
 3. V2 **never** copies Core source into the V2 git history.
 4. V2 **never** forks or redefines Core Phase 08.
 
+### Production path factory
+
+```ts
+import { createCoreRuntime } from "@ailexsi/v2-command-adapter";
+
+const runtime = await createCoreRuntime(); // requires CORE_DATABASE_URL
+// runtime.adapter.create / update / archive / restore
+// runtime.store is Core PostgresEventStore
+// runtime.rebuildAll() → ProjectionEngine + V2 read model (AAS-54)
+```
+
+`InMemoryEventStore` (`@ailexsi/v2-test-kit`) is **test-only**.  
+`createCoreRuntime` **refuses** to start without a real Postgres URL.
+
 If a required capability is missing from Core Phase 07, V2 must **STOP and report the boundary** — not silently patch Core.
 
 ## Memory API used by V2

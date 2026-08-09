@@ -19,6 +19,10 @@ export default defineConfig({
       "@ailexsi/contracts": path.join(core, "packages/contracts/src/index.ts"),
       "@ailexsi/memory": path.join(core, "packages/core/memory/src/index.ts"),
       "@ailexsi/eventstore": path.join(core, "packages/infrastructure/eventstore/src/index.ts"),
+      "@ailexsi/persistence": path.join(
+        core,
+        "packages/infrastructure/persistence/src/index.ts"
+      ),
       "@ailexsi/projections": path.join(
         core,
         "packages/infrastructure/projections/src/index.ts"
@@ -29,7 +33,7 @@ export default defineConfig({
     globals: false,
     environment: "node",
     include: ["tests/**/*.test.ts", "packages/**/src/**/*.test.ts"],
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });

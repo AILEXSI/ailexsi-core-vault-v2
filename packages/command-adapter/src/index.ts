@@ -14,3 +14,10 @@ export {
   validateUpdateMemory,
   validateLifecycle,
 } from "./validate.js";
+export {
+  createCoreRuntime,
+  probeCoreDatabase,
+  resolveCoreDatabaseUrl,
+  type CoreRuntime,
+  type CreateCoreRuntimeOptions,
+} from "./core-runtime.js";

@@ -22,6 +22,13 @@ describe("foundation acceptance markers", () => {
     expect(existsSync(path.join(root, "docs/CONTINUITY.md"))).toBe(true);
     expect(existsSync(path.join(root, "docs/MIGRATION.md"))).toBe(true);
     expect(existsSync(path.join(root, "docs/ARCHITECTURE.md"))).toBe(true);
+    expect(existsSync(path.join(root, "docs/BASELINES.md"))).toBe(true);
+    expect(
+      existsSync(path.join(root, "docs/adr/001-source-of-truth.md"))
+    ).toBe(true);
+    expect(
+      existsSync(path.join(root, "packages/command-adapter/src/core-runtime.ts"))
+    ).toBe(true);
   });
 
   it("env template separates CORE and V2 DB URLs without secrets", () => {

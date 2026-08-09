@@ -101,18 +101,33 @@ Never connect V2 development to production Core databases.
 
 ## Foundation milestone status labels
 
+Statuses below are **evidence-based**. Foundation **GREEN** requires live PostgreSQL
+proof via `npm run acceptance` (Core `PostgresEventStore`). Mock-only suites are
+not sufficient for GREEN.
+
 | Capability | Status |
 |------------|--------|
-| Memory command path (create/get/update/archive/restore/getHistory) | VERIFIED (tests) |
+| Memory command path (mock EventStore unit/integration) | VERIFIED (tests) |
+| Memory command path (live Postgres + Core EventStore) | VERIFIED (`PostgresEventStore` via docker URL or embedded-postgres) |
 | Read models (classified, rebuildable) | VERIFIED (tests) |
 | Continuity package foundation | VERIFIED (tests) |
 | Cultivation + AI writeback safety | VERIFIED (tests) |
-| Migration scanner (no production write) | VERIFIED (tests) |
+| Migration scanner + dry-run (no production write) | VERIFIED (tests) |
+| Dual-write guard | VERIFIED (static + tests) |
 | Connectome MVP presentation | PARTIAL |
 | Desktop Tauri shell | PARTIAL (foundation UI) |
 | Physics / Knowledge / Reflection / Learning / Trust / Scheduler | PLANNED (Core) |
 | Full Connectome ontology | PLANNED |
 | Production vault migration writeback | NOT STARTED (foundation tooling only) |
+
+### Live Postgres (required for GREEN)
+
+```bash
+docker compose up -d
+# CORE_DATABASE_URL defaults to docker-compose credentials on :5433
+npm run test:live
+npm run acceptance
+```
 
 ---
 

@@ -31,6 +31,7 @@
       "@ailexsi/contracts": [".deps/ailexsi-core/packages/contracts/src/index.ts"],
       "@ailexsi/memory": [".deps/ailexsi-core/packages/core/memory/src/index.ts"],
       "@ailexsi/eventstore": [".deps/ailexsi-core/packages/infrastructure/eventstore/src/index.ts"],
+      "@ailexsi/persistence": [".deps/ailexsi-core/packages/infrastructure/persistence/src/index.ts"],
       "@ailexsi/projections": [".deps/ailexsi-core/packages/infrastructure/projections/src/index.ts"]
     }
   }

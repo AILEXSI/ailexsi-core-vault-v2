@@ -20,6 +20,7 @@ import {
   type DesktopHostStartOptions,
   type DesktopMemoryCommand,
 } from "./desktop-host.js";
+import { formatV2Error } from "./errors.js";
 
 export const DEFAULT_DESKTOP_HOST_PORT = 17890;
 
@@ -128,7 +129,7 @@ export async function startDesktopBridgeServer(
     } catch (e) {
       send(res, 500, {
         ok: false,
-        error: e instanceof Error ? e.message : String(e),
+        error: formatV2Error(e),
       });
     }
   });

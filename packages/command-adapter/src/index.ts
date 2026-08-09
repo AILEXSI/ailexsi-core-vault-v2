@@ -34,4 +34,10 @@ export {
   DEFAULT_DESKTOP_HOST_PORT,
   type DesktopBridgeServer,
 } from "./desktop-bridge-server.js";
+export {
+  classifyV2Error,
+  formatV2Error,
+  type V2ErrorCode,
+  type ClassifiedV2Error,
+} from "./errors.js";
 

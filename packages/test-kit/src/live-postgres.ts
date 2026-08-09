@@ -1,7 +1,11 @@
 /**
  * Resolve a real PostgreSQL connection for live suites.
- * Preference: CORE_DATABASE_URL / DATABASE_URL → embedded-postgres binaries.
+ * Preference: CORE_DATABASE_URL / DATABASE_URL (if reachable)
+ *          → embedded-postgres binaries
  * Never returns an InMemory EventStore handle — connection string only.
+ *
+ * If env URL is set but auth/connect fails, fall through to embedded
+ * (placeholder USER/PASS must not hard-fail the suite).
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -14,25 +18,33 @@ export type LivePgHandle = {
   stop: () => Promise<void>;
 };
 
-export async function startLivePostgres(): Promise<LivePgHandle> {
-  const envUrl =
-    process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || "";
-  if (envUrl.startsWith("postgres")) {
-    // Probe
-    const postgres = (await import("postgres")).default;
-    const sql = postgres(envUrl, { max: 1 });
-    try {
-      await sql`SELECT 1`;
-    } finally {
-      await sql.end({ timeout: 2 });
-    }
+async function tryEnvUrl(envUrl: string): Promise<LivePgHandle | null> {
+  if (!envUrl.startsWith("postgres")) return null;
+  const postgres = (await import("postgres")).default;
+  const sql = postgres(envUrl, { max: 1, connect_timeout: 3 });
+  try {
+    await sql`SELECT 1`;
     return {
       connectionString: envUrl,
       mode: "env",
       stop: async () => {},
     };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[startLivePostgres] CORE_DATABASE_URL/DATABASE_URL not usable (${msg.slice(0, 120)}). Falling back to embedded-postgres.`
+    );
+    return null;
+  } finally {
+    try {
+      await sql.end({ timeout: 2 });
+    } catch {
+      /* ignore */
+    }
   }
+}
 
+async function startEmbedded(): Promise<LivePgHandle> {
   const EmbeddedPostgres = (await import("embedded-postgres")).default;
   const dataDir = mkdtempSync(path.join(tmpdir(), "ailexsi-v2-pg-"));
   const port = 55000 + Math.floor(Math.random() * 2000);
@@ -83,7 +95,17 @@ export async function startLivePostgres(): Promise<LivePgHandle> {
 
   throw new Error(
     "VERIFICATION PENDING: cannot start live PostgreSQL " +
-      "(set CORE_DATABASE_URL or run where embedded-postgres can start). " +
+      "(set a working CORE_DATABASE_URL or run where embedded-postgres can start). " +
       `Last error: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`
   );
+}
+
+export async function startLivePostgres(): Promise<LivePgHandle> {
+  const envUrl =
+    process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || "";
+  if (envUrl) {
+    const fromEnv = await tryEnvUrl(envUrl);
+    if (fromEnv) return fromEnv;
+  }
+  return startEmbedded();
 }

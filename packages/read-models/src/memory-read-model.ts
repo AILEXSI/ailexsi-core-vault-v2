@@ -1,13 +1,14 @@
 /**
- * V2 Memory read model.
+ * V2 Memory read model — DERIVED only.
  *
- * Core MemoryProjection / MemoryDomain projection
+ * Core MemoryProjection / EventStore
  *        ↓
  * V2 MemoryReadModel (classified view)
  *        ↓
- * Desktop UI
+ * Query Service → Desktop UI
  *
- * Rebuildable: CLEAR → rebuildFromCells/Events → IDENTICAL for canonical fields.
+ * Rebuildable: CLEAR → rebuildFromEvents/CoreProjection → IDENTICAL
+ * Never a second source of truth.
  */
 
 import type {
@@ -44,10 +45,36 @@ export interface MemoryDetailView {
   timestamps: ClassifiedField<MemoryCell["timestamps"]>;
   relationRefs: ClassifiedField<MemoryCell["relationRefs"]>;
   currentVersion: ClassifiedField<number>;
-  /** V2-derived display title (not a Core field). */
   displayTitle: ClassifiedField<string>;
-  /** Cognitive vector is Core projection placeholder (Physics PLANNED). */
   cognitiveState: ClassifiedField<MemoryCell["cognitiveState"]>;
+}
+
+/** Deterministic list query — foundation, not search. */
+export interface ListMemoriesQuery {
+  includeArchived?: boolean;
+  /** 1..100 inclusive */
+  pageSize: number;
+  /**
+   * Keyset cursor from previous page (`updatedAt\tid`).
+   * Exclusive: returns items strictly after this sort key.
+   */
+  afterCursor?: string | null;
+}
+
+export interface ListMemoriesPage {
+  items: MemoryListItem[];
+  pageSize: number;
+  nextCursor: string | null;
+  /** Total matching (filter) before pagination — DERIVED count. */
+  totalMatching: number;
+}
+
+export class MemoryQueryValidationError extends Error {
+  readonly code = "VALIDATION" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "MemoryQueryValidationError";
+  }
 }
 
 function displayTitleFrom(cell: MemoryCell): string {
@@ -60,12 +87,48 @@ function displayTitleFrom(cell: MemoryCell): string {
   return cell.content.storageRef;
 }
 
+/** Sort key: confirmedAt ASC, then id ASC — stable & deterministic. */
+export function memorySortKey(item: {
+  updatedAt: string;
+  id: string;
+}): string {
+  return `${item.updatedAt}\t${item.id}`;
+}
+
+export function compareMemoryListItems(
+  a: { updatedAt: string; id: string },
+  b: { updatedAt: string; id: string }
+): number {
+  const t = a.updatedAt.localeCompare(b.updatedAt);
+  if (t !== 0) return t;
+  return a.id.localeCompare(b.id);
+}
+
+function toListItem(cell: MemoryCell): MemoryListItem {
+  return {
+    id: cell.identity.id,
+    shortId: cell.identity.shortId,
+    title: displayTitleFrom(cell),
+    lifecycleState: cell.lifecycle.state,
+    version: cell.currentVersion,
+    tags: cell.context.tags ?? [],
+    project: cell.context.project,
+    updatedAt: cell.timestamps.confirmedAt,
+    classification: {
+      id: "CANONICAL",
+      lifecycleState: "CANONICAL",
+      version: "CANONICAL",
+      title: "DERIVED",
+      tags: "CANONICAL",
+    },
+  };
+}
+
 export class MemoryReadModel {
   private cells = new Map<UUID, MemoryCell>();
   private histories = new Map<UUID, MemoryVersion[]>();
   private coreProjection = new MemoryProjection();
 
-  /** Apply a Core-projected MemoryCell into the V2 read model. */
   upsertFromCore(cell: MemoryCell, history?: MemoryVersion[]): void {
     this.cells.set(cell.identity.id, cell);
     if (history) {
@@ -73,9 +136,7 @@ export class MemoryReadModel {
     }
   }
 
-  /** Rebuild from Core MemoryProjection snapshot. */
   rebuildFromCoreProjection(projection: MemoryProjection): void {
-    // Do not call clear() here — clear() also wipes coreProjection.
     this.cells.clear();
     this.histories.clear();
     for (const [id, cell] of projection.snapshot()) {
@@ -84,10 +145,6 @@ export class MemoryReadModel {
     }
   }
 
-  /**
-   * Rebuild from EventStore stream using Core MemoryProjection, then mirror.
-   * Proves V2 read model is rebuildable from canonical events.
-   */
   rebuildFromEvents(envelopes: EventEnvelope[]): void {
     this.coreProjection.rebuildFromEvents(envelopes);
     this.rebuildFromCoreProjection(this.coreProjection);
@@ -105,39 +162,75 @@ export class MemoryReadModel {
     return this.toDetail(cell);
   }
 
+  /** Full list (no pagination) — deterministic order. */
   list(options?: { includeArchived?: boolean }): MemoryListItem[] {
     const includeArchived = options?.includeArchived ?? true;
     const items: MemoryListItem[] = [];
     for (const cell of this.cells.values()) {
       if (!includeArchived && cell.lifecycle.state === "archived") continue;
-      items.push({
-        id: cell.identity.id,
-        shortId: cell.identity.shortId,
-        title: displayTitleFrom(cell),
-        lifecycleState: cell.lifecycle.state,
-        version: cell.currentVersion,
-        tags: cell.context.tags ?? [],
-        project: cell.context.project,
-        updatedAt: cell.timestamps.confirmedAt,
-        classification: {
-          id: "CANONICAL",
-          lifecycleState: "CANONICAL",
-          version: "CANONICAL",
-          title: "DERIVED",
-          tags: "CANONICAL",
-        },
-      });
+      items.push(toListItem(cell));
     }
-    return items.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    return items.sort(compareMemoryListItems);
+  }
+
+  /**
+   * Deterministic keyset pagination.
+   * Ordering: updatedAt ASC, id ASC.
+   * Cursor: memorySortKey of last item on previous page.
+   */
+  listPage(query: ListMemoriesQuery): ListMemoriesPage {
+    const pageSize = query.pageSize;
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      throw new MemoryQueryValidationError(
+        `pageSize must be an integer 1..100 (got ${pageSize})`
+      );
+    }
+
+    const all = this.list({ includeArchived: query.includeArchived });
+    let start = 0;
+    if (query.afterCursor) {
+      const cursor = query.afterCursor;
+      const idx = all.findIndex((item) => memorySortKey(item) === cursor);
+      if (idx >= 0) {
+        start = idx + 1;
+      } else {
+        // Cursor not found: advance past all keys <= cursor (gap-safe continue)
+        start = all.findIndex((item) => memorySortKey(item) > cursor);
+        if (start < 0) start = all.length;
+      }
+    }
+
+    const slice = all.slice(start, start + pageSize);
+    const last = slice[slice.length - 1];
+    const nextCursor =
+      slice.length === pageSize && last && start + pageSize < all.length
+        ? memorySortKey(last)
+        : slice.length === pageSize && start + pageSize === all.length
+          ? null
+          : last && start + slice.length < all.length
+            ? memorySortKey(last)
+            : null;
+
+    // Fix nextCursor: non-null only if more remain
+    const hasMore = start + slice.length < all.length;
+    return {
+      items: slice,
+      pageSize,
+      nextCursor: hasMore && last ? memorySortKey(last) : null,
+      totalMatching: all.length,
+    };
   }
 
   getHistory(id: UUID): MemoryVersion[] {
     return [...(this.histories.get(id) ?? [])];
   }
 
-  /** Snapshot of canonical cells for AAS-54 equality. */
   snapshotCells(): Map<UUID, MemoryCell> {
     return new Map(this.cells);
+  }
+
+  size(): number {
+    return this.cells.size;
   }
 
   private toDetail(cell: MemoryCell): MemoryDetailView {
